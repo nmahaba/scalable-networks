@@ -16,9 +16,10 @@
 #include<errno.h>
 #include<Constants.h>
 #include<SNodeInformation.h>
+#include<stdlib.h>
 
 /****************************************************************************************
- /** initializeNodeDB: Function to read the configuration file and build node database
+ /** initializeNodeDB: Function to read the node configuration file and build node database
   *
   * @param[in] connectionsFile: The name of the file which has information about all nodes
   * 							in the system
@@ -26,7 +27,18 @@
   * @return 0 if PASSED or -1 if FAILED
  *
  ****************************************************************************************/
-int initializeNodeDB(char *connectionsFile);
+int initializeNodeDB(char *nodeInfoFile);
+
+/****************************************************************************************
+ /** readConnectionsFile: Function to read the connection configuration file and build node database
+  *
+  * @param[in] connectionsFile: The name of the file which has information about all connections
+  * 							in the system
+  *
+  * @return 0 if PASSED or -1 if FAILED
+ *
+ ****************************************************************************************/
+int readConnectionsFile(char *connectionsInfoFile);
 
 #endif /* FILE_UTILITIES_H_ */
 

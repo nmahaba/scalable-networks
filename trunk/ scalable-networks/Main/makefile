@@ -5,7 +5,7 @@ CFLAGS = -g -lpthread
 INCLUDES = -I. -I../Common/. -I../SocketUtilities/. -I../FileUtilities/.
 #SOURCES= ThreadUtilities.c
 SOURCES = Main.cpp ../SocketUtilities/SocketUtilities.cpp ../FileUtilities/FileUtilities.cpp 
-OUTPUT = nodes.out
+OUTPUT = main.out
 
 all:
 	$(CC) $(CFLAGS) $(INCLUDES) $(SOURCES) -o $(OUTPUT)
