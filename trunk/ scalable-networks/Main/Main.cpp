@@ -7,8 +7,11 @@
 
 #include<iostream>
 #include<FileUtilities.h>
+#include<SocketUtilities.h>
 #include<Constants.h>
 #include<stdlib.h>
+
+//#define DEBUG
 
 using namespace std;
 
@@ -16,11 +19,10 @@ using namespace std;
 /* Global variables - Start */
 SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 int connectionInfo[MAX_NUMBER_OF_NODES] ={0};
-int ownNodeId = -1;
 /* Global variables - End   */
 
 /* Debug functions */
-void printNodeDB()
+void printNodeDB(int ownNodeId)
 {
 	int index = 0;
 
@@ -28,7 +30,7 @@ void printNodeDB()
 	printf("NodeId\tHostName\tTCPPort\tUDPPort\n");
 	printf("*****************************************\n");
 
-	for(index=0 ; index<MAX_NUMBER_OF_NODES ; index++)
+	for(index=1 ; index<MAX_NUMBER_OF_NODES ; index++)
 	{
 		printf("%s %15s %10s %10s\n",
 				nodeInformation[index].nodeId,
@@ -39,7 +41,7 @@ void printNodeDB()
 }
 
 /* Debug functions */
-void printConnectionInfo()
+void printConnectionInfo(int ownNodeId)
 {
 	int index = 0;
 
@@ -60,7 +62,7 @@ void printConnectionInfo()
 
 
 /* Command line arguments
- * nodes.out nodeInformationFile  connectionInfoFile*/
+ * nodes.out nodeId nodeInformationFile connectionInfoFile*/
 
 /*
  * Main functionalities
@@ -77,6 +79,10 @@ void printConnectionInfo()
  */
 int main(int argc, char **argv)
 {
+	char nodeInformationFile[MAX_CHARACTERS_IN_FILENAME];
+	char connectionInfoFile[MAX_CHARACTERS_IN_FILENAME];
+	int ownNodeId = -1;
+
 	/* Check command line arguments */
 	if(argc != 4)
 	{
@@ -84,30 +90,42 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	/* Extract command line arguments */
 	/* Store own node information */
 	ownNodeId = atoi(argv[1]);
+	strcpy(nodeInformationFile, argv[2]);
+	strcpy(connectionInfoFile, argv[3]);
 
 	/* Read the connections file and fill the database */
-	if(initializeNodeDB(argv[2]) == -1)
+	if(initializeNodeDB(nodeInformationFile) == -1)
 	{
 		return -1;
 	}
 
-#if 1
+#ifdef DEBUG
 	/* Debug function */
-	printNodeDB();
+	printNodeDB(ownNodeId);
 #endif
 
 	/* Read connections file */
-	if(readConnectionsFile(argv[3]) == -1)
+	if(readConnectionsFile(connectionInfoFile, ownNodeId) == -1)
 	{
 		return -1;
 	}
 
-#if 1
+#ifdef DEBUG
 	/* Debug function */
-	printConnectionInfo();
+	printConnectionInfo(ownNodeId);
 #endif
+
+	/* Establish connection with the prime nodes */
+	if(connectToPrimeNodes(ownNodeId) == -1)
+	{
+		return -1;
+	}
+
+	/* Infinitely wait for new TCP connections or respond to other queries on TCP connections */
+	processTCPConnections(ownNodeId);
 
 	return 0;
 }

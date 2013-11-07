@@ -34,11 +34,12 @@ int initializeNodeDB(char *nodeInfoFile);
   *
   * @param[in] connectionsFile: The name of the file which has information about all connections
   * 							in the system
+  * @param[in] ownNodeId: 		Own NodeId
   *
   * @return 0 if PASSED or -1 if FAILED
  *
  ****************************************************************************************/
-int readConnectionsFile(char *connectionsInfoFile);
+int readConnectionsFile(char *connectionsInfoFile, int ownNodeId);
 
 #endif /* FILE_UTILITIES_H_ */
 
