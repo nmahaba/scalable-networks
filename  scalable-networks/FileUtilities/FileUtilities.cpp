@@ -11,7 +11,6 @@
 /* EXTERN declarations - START 	*/
 extern SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 extern int connectionInfo[MAX_NUMBER_OF_NODES];
-extern int ownNodeId;
 /* EXTERN declarations - END 	*/
 
 /****************************************************************************************
@@ -28,9 +27,9 @@ int initializeNodeDB(char *nodeInfoFile)
 	FILE *fd_nodeInfoFile;
 	char line[100];
 	char nodeFields[4][50];
+	int nodeId;
 	char *token;
 	int index 		= 0;
-	int nodeIndex 	= 0;
 
 	/* File name validation */
 	if(nodeInfoFile == NULL)
@@ -49,6 +48,18 @@ int initializeNodeDB(char *nodeInfoFile)
 		return -1;
 	}
 
+	/* Initialize the database */
+	for(nodeId=0 ; nodeId<MAX_NUMBER_OF_NODES ; nodeId++)
+	{
+		strcpy(nodeInformation[nodeId].nodeId, "");		/* NodeId */
+		strcpy(nodeInformation[nodeId].hostName, "");	/* HostName */
+		strcpy(nodeInformation[nodeId].tcpPortNumber, "");	/* TCP Port */
+		strcpy(nodeInformation[nodeId].udpPortNumber, "");	/* UDP Port */
+
+		nodeInformation[nodeId].tcpSocketFd = -1;
+		nodeInformation[nodeId].udpSocketFd = -1;
+	}
+
 	/* Format of the configuration file
 	 * <NodeId> <HostName> <TCPPortNumber> <UDPPortNumber>
 	 */
@@ -58,9 +69,6 @@ int initializeNodeDB(char *nodeInfoFile)
 	 * 2. Split the line on spaces and extract the 4 required fields.
 	 * 3. Store the fields in the database.
 	 * */
-
-	/* Index to the node database */
-	nodeIndex = 0;
 
 	while(fgets(line, 100, fd_nodeInfoFile) != NULL)
 	{
@@ -75,29 +83,23 @@ int initializeNodeDB(char *nodeInfoFile)
 			token = strtok(NULL," ");
 		}
 
+		/* PS: The contents of nodeFields array is below
+		 * nodeFields[0] = nodeId
+		 * nodeFields[1] = host name of the node
+		 * nodeFields[2] = TCP Port number
+		 * nodeFields[3] = UDP Port number */
+
+		/* Extract the nodeId, this will be used to directly index the node database */
+		nodeId = atoi(nodeFields[0]);
+
 		/* Store the information in the database */
-		strcpy(nodeInformation[nodeIndex].nodeId, nodeFields[0]);		/* NodeId */
-		strcpy(nodeInformation[nodeIndex].hostName, nodeFields[1]);	/* HostName */
-		strcpy(nodeInformation[nodeIndex].tcpPortNumber, nodeFields[2]);	/* TCP Port */
-		strcpy(nodeInformation[nodeIndex].udpPortNumber, nodeFields[3]);	/* UDP Port */
+		strcpy(nodeInformation[nodeId].nodeId, nodeFields[0]);		/* NodeId */
+		strcpy(nodeInformation[nodeId].hostName, nodeFields[1]);	/* HostName */
+		strcpy(nodeInformation[nodeId].tcpPortNumber, nodeFields[2]);	/* TCP Port */
+		strcpy(nodeInformation[nodeId].udpPortNumber, nodeFields[3]);	/* UDP Port */
 
-		nodeInformation[nodeIndex].tcpSocketFd = -1;
-		nodeInformation[nodeIndex].udpSocketFd = -1;
-
-		/* Increment nodeIndex for next entry */
-		nodeIndex++;
-	}
-
-	/* For the remaining entries fill NULL entries */
-	for(;nodeIndex<MAX_NUMBER_OF_NODES ; nodeIndex++)
-	{
-		strcpy(nodeInformation[nodeIndex].nodeId, "");		/* NodeId */
-		strcpy(nodeInformation[nodeIndex].hostName, "");	/* HostName */
-		strcpy(nodeInformation[nodeIndex].tcpPortNumber, "");	/* TCP Port */
-		strcpy(nodeInformation[nodeIndex].udpPortNumber, "");	/* UDP Port */
-
-		nodeInformation[nodeIndex].tcpSocketFd = -1;
-		nodeInformation[nodeIndex].udpSocketFd = -1;
+		nodeInformation[nodeId].tcpSocketFd = -1;
+		nodeInformation[nodeId].udpSocketFd = -1;
 	}
 
 	return 0;
@@ -108,18 +110,18 @@ int initializeNodeDB(char *nodeInfoFile)
   *
   * @param[in] connectionsFile: The name of the file which has information about all connections
   * 							in the system
+  * @param[in] ownNodeId: 		Own NodeId
   *
   * @return 0 if PASSED or -1 if FAILED
  *
  ****************************************************************************************/
-int readConnectionsFile(char *connectionsInfoFile)
+int readConnectionsFile(char *connectionsInfoFile, int ownNodeId)
 {
 	FILE *fd_connectionsInfoFile;
 	char line[100];
 	char connectionFields[2][4];	/* Stores sourceId and destinationId */
 	char *token;
 	int index 				= 0;
-	int nodeIndex 			= 0;
 	int sourceNodeId 		= 0;
 	int destinationNodeId 	= 0;
 
@@ -150,9 +152,6 @@ int readConnectionsFile(char *connectionsInfoFile)
 	 * 2. Split the line on "," and extract the source and destination nodes.
 	 * 3. Store the connection information in the database.
 	 * */
-
-	/* Index to the node database */
-	nodeIndex = 0;
 
 	while(fgets(line, 100, fd_connectionsInfoFile) != NULL)
 	{
