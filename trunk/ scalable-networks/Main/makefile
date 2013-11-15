@@ -2,9 +2,8 @@
 
 CC = g++
 CFLAGS = -g -lpthread
-INCLUDES = -I. -I../Common/. -I../SocketUtilities/. -I../FileUtilities/.
-#SOURCES= ThreadUtilities.c
-SOURCES = Main.cpp ../SocketUtilities/SocketUtilities.cpp ../FileUtilities/FileUtilities.cpp 
+INCLUDES = -I. -I../Common/. -I../SocketUtilities/. -I../FileUtilities/. -I../ThreadUtilities/.
+SOURCES = Main.cpp ../SocketUtilities/SocketUtilities.cpp ../FileUtilities/FileUtilities.cpp ../ThreadUtilities/ThreadUtilities.cpp
 OUTPUT = main.out
 
 all:

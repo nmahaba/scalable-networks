@@ -305,6 +305,8 @@ int updateScoketDescInNodeDB(struct sockaddr *pSockAddr, int fileDescriptor)
 
 	returnValue = getnameinfo(pSockAddr, sizeof (struct sockaddr), newNodeHostName, MAX_CHARACTERS_IN_HOSTNAME, 0, 0, 0);
 
+	printf("INFO: %s connected\n", newNodeHostName);
+
 	if(returnValue == -1)
 	{
 		perror("Error: updateFileDescriptorInNodeInformation, getnameinfo failed\n");
