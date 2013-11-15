@@ -5,20 +5,26 @@
  *      Author: Niranjan
  */
 
-#include<iostream>
-#include<FileUtilities.h>
-#include<SocketUtilities.h>
-#include<Constants.h>
-#include<stdlib.h>
+#include <iostream>
+#include <FileUtilities.h>
+#include <SocketUtilities.h>
+#include <ThreadUtilities.h>
+#include <Constants.h>
+#include <stdlib.h>
+#include <pthread.h>
 
 //#define DEBUG
 
 using namespace std;
 
-
 /* Global variables - Start */
 SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 int connectionInfo[MAX_NUMBER_OF_NODES] ={0};
+
+/* Thread attributes */
+pthread_attr_t udpQueryThreadAttr;
+pthread_t udpQueryThread;
+
 /* Global variables - End   */
 
 /* Debug functions */
@@ -124,8 +130,22 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	/* Spawn the thread for handling UDP Statistics Queries */
+	if(spawnUdpThreadForQueries() == -1)
+	{
+		return -1;
+	}
+
 	/* Infinitely wait for new TCP connections or respond to other queries on TCP connections */
 	processTCPConnections(ownNodeId);
+
+	/* Join to one of the threads so that main doesn't exit killing all the processes */
+	pthread_join(udpQueryThread, NULL);
+
+	/* Cleanup all the resources
+	 * 1. Close all open sockets.
+	 * 2. Destroy thread attributes.
+	 * Write a function for it */
 
 	return 0;
 }
