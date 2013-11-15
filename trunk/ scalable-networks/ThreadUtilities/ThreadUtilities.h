@@ -23,9 +23,25 @@
 int spawnUdpThreadForQueries();
 
 /*
- * handleFileTransferRequest: Function executes on a new thread and handles the UDP, node query messages
+ * handleFileNodeQueries: Function executes on a new thread and handles the UDP, node query messages
  */
-void *handleFileTransferRequest(void *data);
+void *handleFileNodeQueries(void *data);
+
+
+/*********************************************************************************************************
+ /** spawnUdpThreadForJoinReqResp: Function to spawn a thread to handle UDP messages for JoinReq, JoinResp
+  *
+  *  Block on a UDP Socket for JoinReq message, do the processing and send the JoinResp message
+  *
+  * @return -1 if error
+ *
+ *********************************************************************************************************/
+int spawnUdpThreadForEntryHandler();
+
+/*
+ * handleNodeEntry: Function executes on a new thread and handles the UDP, node query messages
+ */
+void *handleNodeEntry(void *data);
 
 
 #endif /* THREADUTILITIES_H_ */

@@ -21,9 +21,14 @@ using namespace std;
 SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 int connectionInfo[MAX_NUMBER_OF_NODES] ={0};
 
-/* Thread attributes */
+/***************** Thread attributes ****************/
+/* UDP NodeQuery thread */
 pthread_attr_t udpQueryThreadAttr;
 pthread_t udpQueryThread;
+
+/* UDP JoinReq/JoinResp thread */
+pthread_attr_t udpEntryHandlerThreadAttr;
+pthread_t udpEntryHandlerThread;
 
 /* Global variables - End   */
 
@@ -65,6 +70,12 @@ void printConnectionInfo(int ownNodeId)
 	}
 	printf("\n");
 }
+
+/*
+ * ResourceCleanUp - Function which is called in the end to cleanup all resources
+ * This should be a handler for a SIGKILL signal as our application runs infinitely
+ * And will be terminated by pressing CTRL-C
+ * */
 
 
 /* Command line arguments
@@ -136,11 +147,17 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	/* Spawn the thread for handling Join Request/Response messages */
+	if(spawnUdpThreadForEntryHandler() == -1)
+	{
+		return -1;
+	}
+
 	/* Infinitely wait for new TCP connections or respond to other queries on TCP connections */
 	processTCPConnections(ownNodeId);
 
 	/* Join to one of the threads so that main doesn't exit killing all the processes */
-	pthread_join(udpQueryThread, NULL);
+	//pthread_join(udpQueryThread, NULL);
 
 	/* Cleanup all the resources
 	 * 1. Close all open sockets.
