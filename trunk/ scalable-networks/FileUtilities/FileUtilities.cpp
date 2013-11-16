@@ -51,13 +51,12 @@ int initializeNodeDB(char *nodeInfoFile)
 	/* Initialize the database */
 	for(nodeId=0 ; nodeId<MAX_NUMBER_OF_NODES ; nodeId++)
 	{
-		strcpy(nodeInformation[nodeId].nodeId, "");		/* NodeId */
+		nodeInformation[nodeId].nodeId = -1;					/* NodeId */
 		strcpy(nodeInformation[nodeId].hostName, "");	/* HostName */
 		strcpy(nodeInformation[nodeId].tcpPortNumber, "");	/* TCP Port */
 		strcpy(nodeInformation[nodeId].udpPortNumber, "");	/* UDP Port */
 
 		nodeInformation[nodeId].tcpSocketFd = -1;
-		nodeInformation[nodeId].udpSocketFd = -1;
 	}
 
 	/* Format of the configuration file
@@ -93,13 +92,12 @@ int initializeNodeDB(char *nodeInfoFile)
 		nodeId = atoi(nodeFields[0]);
 
 		/* Store the information in the database */
-		strcpy(nodeInformation[nodeId].nodeId, nodeFields[0]);		/* NodeId */
+		nodeInformation[nodeId].nodeId = atoi(nodeFields[0]);		/* NodeId */
 		strcpy(nodeInformation[nodeId].hostName, nodeFields[1]);	/* HostName */
 		strcpy(nodeInformation[nodeId].tcpPortNumber, nodeFields[2]);	/* TCP Port */
 		strcpy(nodeInformation[nodeId].udpPortNumber, nodeFields[3]);	/* UDP Port */
 
 		nodeInformation[nodeId].tcpSocketFd = -1;
-		nodeInformation[nodeId].udpSocketFd = -1;
 	}
 
 	return 0;
