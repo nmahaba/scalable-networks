@@ -12,6 +12,9 @@
 #include <string.h>
 #include <Constants.h>
 #include <SNodeInformation.h>
+#include <EMessageId.h>
+#include <SConnectRequest.h>
+#include <SRouteInformation.h>
 
 
 /****************************************************************************************

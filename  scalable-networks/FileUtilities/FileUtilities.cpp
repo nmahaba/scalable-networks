@@ -99,6 +99,8 @@ int initializeNodeDB(char *nodeInfoFile)
 
 		nodeInformation[nodeId].tcpSocketFd = -1;
 	}
+	
+	fclose(fd_nodeInfoFile);
 
 	return 0;
 }
@@ -189,6 +191,8 @@ int readConnectionsFile(char *connectionsInfoFile, int ownNodeId)
 			connectionInfo[sourceNodeId] = 1;
 		}
 	}
+	
+	fclose(fd_connectionsInfoFile);
 
 	return 0;
 }
