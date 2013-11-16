@@ -104,7 +104,7 @@ int connectToPrimeNodes(int ownNodeId)
 
 			if((returngetaddrinfo = getaddrinfo(nodeInformation[ix].hostName, nodeInformation[ix].tcpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
 			{
-				printf("Error: connectToAllNodes ECODE %s for %s Port %s\n", strerror(returngetaddrinfo), nodeInformation[ix].hostName,
+				printf("Error: connectToPrimeNodes ECODE %s for %s Port %s\n", strerror(returngetaddrinfo), nodeInformation[ix].hostName,
 						nodeInformation[ix].tcpPortNumber);
 
 				return -1;
@@ -119,8 +119,12 @@ int connectToPrimeNodes(int ownNodeId)
 					continue;
 				}
 
-				if (connect(nodeInformation[ix].tcpSocketFd, iSocketLoopIter->ai_addr, iSocketLoopIter->ai_addrlen) == -1)
+				if (-1 == connect(nodeInformation[ix].tcpSocketFd, iSocketLoopIter->ai_addr, iSocketLoopIter->ai_addrlen))
 				{
+#ifdef DEBUG
+					printf("DEBUG: Cannot connect, socketFd %d\n", nodeInformation[ix].tcpSocketFd);
+#endif // DEBUG
+
 					close(nodeInformation[ix].tcpSocketFd);
 
 #ifdef DEBUG
@@ -159,12 +163,21 @@ int processTCPConnections(int ownNodeId)
 	int numberOfBytesReceived = 0;  /* Number of bytes received by recv - If 0 then node has terminated connection */
 	fd_set master; 					/* Master file descriptor list */
 	fd_set read_fds; 				/* Temp file descriptor list for select() */
+	char buffer[100];
+	int messageSize	= -1;
+	eMessageId messageId;
+	mConnectRequest connectRequest;
+	mRouteInformation routeInformation;
 
 	socklen_t addrlen;
 	struct sockaddr_storage remoteaddr; /* Client address */
 
 	/* Create a socket, bind a address to the socket and get a file descriptor to listen to connections  */
 	listener = createSocketAndBindAddress(ownNodeId);
+
+#ifdef DEBUG
+	printf("DEBUG: Listening socket %d\n", listener);
+#endif // DEBUG
 
 	if(listener == -1)
 	{
@@ -185,7 +198,7 @@ int processTCPConnections(int ownNodeId)
 	fdmax = listener;
 
 	/* Add the file descriptors obtained during connect() to the master list so that nodes can also listen to data sent by other nodes */
-	for(ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
 		if(nodeInformation[ix].tcpSocketFd != -1)
 		{
@@ -254,6 +267,52 @@ int processTCPConnections(int ownNodeId)
 				{
 					//printf("DEBUG: Data received by the node\n");
 
+					memset(buffer, 0, 100);			/* Clear buffer before use */
+
+					/* Read just the message type - 4 bytes */
+					recv(ix, &messageId, sizeof(messageId), 0);
+
+					memcpy(buffer, &messageId, sizeof(messageId));
+
+#ifdef DEBUG
+					printf("DEBUG: Received message %d, Socket:%d\n", messageId, ix);
+#endif // DEBUG
+
+					if(messageId == ConnectionRequest)
+					{
+						messageSize = sizeof(connectRequest) - sizeof(messageId);
+
+						if(-1 == receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize))
+						{
+							printf("ERROR: processTCPConnections, could receive only %d bytes\n", messageSize);
+							exit(1);
+						}
+
+						memcpy(&connectRequest, buffer, messageSize);
+						printf("INFO: ConnectRequest received MessageId: %d\n", connectRequest.messageId);
+					}
+					else if(messageId == RouteInformation)
+					{
+						messageSize = sizeof(routeInformation) - sizeof(messageId);
+
+						if(-1 == receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize))
+						{
+							printf("ERROR: processTCPConnections, could receive only %d bytes\n", messageSize);
+							exit(1);
+						}
+
+						memcpy(&routeInformation, buffer, messageSize);
+
+						printf("INFO: RouteInformation received MessageId: %d NodeId:%d\n",
+								routeInformation.messageId,
+								routeInformation.nodeId);
+					}
+					else
+					{
+						printf("ERROR: Incorrect message id received, %d\n", messageId);
+					}
+
+
 #if 0
 					/* Receive data from one of the nodes */
 					if ((numberOfBytesReceived = recv(i, &inMessage, sizeof inMessage, 0)) <= 0)
@@ -313,7 +372,7 @@ int updateScoketDescInNodeDB(struct sockaddr *pSockAddr, int fileDescriptor)
 		return -1;
 	}
 
-	for(ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
 		if((strcmp(nodeInformation[ix].hostName, newNodeHostName)) == 0)
 		{

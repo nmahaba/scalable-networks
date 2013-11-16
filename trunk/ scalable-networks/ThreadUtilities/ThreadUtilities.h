@@ -11,21 +11,25 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <SConnectRequest.h>
+#include <SocketUtilities.h>
 
 /*********************************************************************************************************
  /** spawnUdpThreadForQueries: Function to spawn a thread to handle UDP messages for node queries
+  *
+  *  @param[in] ownNodeId: NodeId of the current node
   *
   *  Block on a UDP Socket for Query message and reply when a query arrives
   *
   * @return -1 if error
  *
  *********************************************************************************************************/
-int spawnUdpThreadForQueries();
+int spawnUdpThreadForQueries(int *ownNodeId);
 
 /*
- * handleFileNodeQueries: Function executes on a new thread and handles the UDP, node query messages
+ * handleNodeQueries: Function executes on a new thread and handles the UDP, node query messages
  */
-void *handleFileNodeQueries(void *data);
+void *handleNodeQueries(void *data);
 
 
 /*********************************************************************************************************
@@ -36,7 +40,7 @@ void *handleFileNodeQueries(void *data);
   * @return -1 if error
  *
  *********************************************************************************************************/
-int spawnUdpThreadForEntryHandler();
+int spawnUdpThreadForEntryHandler(int *ownNodeId);
 
 /*
  * handleNodeEntry: Function executes on a new thread and handles the UDP, node query messages

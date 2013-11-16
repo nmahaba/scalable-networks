@@ -19,7 +19,11 @@ using namespace std;
 
 /* Global variables - Start */
 SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
-int connectionInfo[MAX_NUMBER_OF_NODES] ={0};
+int connectionInfo[MAX_NUMBER_OF_NODES] =	{0};
+int primeNode 							= 	0;
+
+/* Mutex */
+pthread_mutex_t mutex_nodeDB;
 
 /***************** Thread attributes ****************/
 /* UDP NodeQuery thread */
@@ -61,7 +65,7 @@ void printConnectionInfo(int ownNodeId)
 	printf("*****************************************\n");
 	printf("Node %d is connected to\n", ownNodeId);
 
-	for(index=0 ; index<MAX_NUMBER_OF_NODES ; index++)
+	for(index=1 ; index<MAX_NUMBER_OF_NODES ; index++)
 	{
 		if(connectionInfo[index] != 0)
 		{
@@ -101,17 +105,18 @@ int main(int argc, char **argv)
 	int ownNodeId = -1;
 
 	/* Check command line arguments */
-	if(argc != 4)
+	if(argc != 5)
 	{
-		printf("ERROR: Invalid command line arguments\nnodes.out <<NodeId>> <<nodeInfoFile>> <<connectionInfoFile>>\n");
+		printf("ERROR: Invalid command line arguments\nnodes.out <<NodeId>> <<PrimeNode>> <<nodeInfoFile>> <<connectionInfoFile>>\n");
 		return -1;
 	}
 
 	/* Extract command line arguments */
 	/* Store own node information */
 	ownNodeId = atoi(argv[1]);
-	strcpy(nodeInformationFile, argv[2]);
-	strcpy(connectionInfoFile, argv[3]);
+	primeNode = atoi(argv[2]);
+	strcpy(nodeInformationFile, argv[3]);
+	strcpy(connectionInfoFile, argv[4]);
 
 	/* Read the connections file and fill the database */
 	if(initializeNodeDB(nodeInformationFile) == -1)
@@ -135,6 +140,9 @@ int main(int argc, char **argv)
 	printConnectionInfo(ownNodeId);
 #endif
 
+	/* Initialize Mutex and Semaphores */
+	pthread_mutex_init(&mutex_nodeDB, NULL);
+
 	/* Establish connection with the prime nodes */
 	if(connectToPrimeNodes(ownNodeId) == -1)
 	{
@@ -142,13 +150,13 @@ int main(int argc, char **argv)
 	}
 
 	/* Spawn the thread for handling UDP Statistics Queries */
-	if(spawnUdpThreadForQueries() == -1)
+	if(spawnUdpThreadForQueries(&ownNodeId) == -1)
 	{
 		return -1;
 	}
 
 	/* Spawn the thread for handling Join Request/Response messages */
-	if(spawnUdpThreadForEntryHandler() == -1)
+	if(spawnUdpThreadForEntryHandler(&ownNodeId) == -1)
 	{
 		return -1;
 	}
