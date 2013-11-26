@@ -10,7 +10,7 @@
 
 typedef enum
 {
-	JoinRequest,
+	JoinRequest=1,
 	JoinResponse,
 	ConnectionRequest,
 	ConnectionResponse,

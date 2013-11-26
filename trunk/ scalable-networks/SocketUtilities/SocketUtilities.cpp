@@ -5,6 +5,10 @@
 /* EXTERN declarations - START 	*/
 extern SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 extern int connectionInfo[MAX_NUMBER_OF_NODES];
+extern pthread_mutex_t mutex_nodeDB;
+extern sem_t sem_connectRespWait;
+extern sem_t sem_startTcpConListen;
+extern int primeNode;
 /* EXTERN declarations - END 	*/
 
 /****************************************************************************************
@@ -104,7 +108,7 @@ int connectToPrimeNodes(int ownNodeId)
 
 			if((returngetaddrinfo = getaddrinfo(nodeInformation[ix].hostName, nodeInformation[ix].tcpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
 			{
-				printf("Error: connectToPrimeNodes ECODE %s for %s Port %s\n", strerror(returngetaddrinfo), nodeInformation[ix].hostName,
+				printf("Error: connectToPrimeNodes ECODE %s for %s Port %s\n", strerror(errno), nodeInformation[ix].hostName,
 						nodeInformation[ix].tcpPortNumber);
 
 				return -1;
@@ -167,13 +171,17 @@ int processTCPConnections(int ownNodeId)
 	int messageSize	= -1;
 	eMessageId messageId;
 	mConnectRequest connectRequest;
+	mConnectResponse connectResponse;
 	mRouteInformation routeInformation;
+	int rv;
+	int nodeId;
+	int jx;
 
 	socklen_t addrlen;
 	struct sockaddr_storage remoteaddr; /* Client address */
 
 	/* Create a socket, bind a address to the socket and get a file descriptor to listen to connections  */
-	listener = createSocketAndBindAddress(ownNodeId);
+	listener = createSocketAndBindAddress(ownNodeId, TCP_CONNECTION, SERVER, 0);
 
 #ifdef DEBUG
 	printf("DEBUG: Listening socket %d\n", listener);
@@ -197,6 +205,16 @@ int processTCPConnections(int ownNodeId)
 	/* Keep track of the biggest file descriptor */
 	fdmax = listener;
 
+	if(primeNode == 0)
+	{
+		/* Wait here until the UDP thread sets up TCP connections and updates the FD's if its a non-prime node */
+		if((rv = sem_wait(&sem_startTcpConListen)) == -1)
+		{
+			printf("ERROR: processTCPConnections, semaphore failed while waiting, Error:%s\n", gai_strerror(rv));
+			exit(1);
+		}
+	}
+
 	/* Add the file descriptors obtained during connect() to the master list so that nodes can also listen to data sent by other nodes */
 	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
@@ -218,6 +236,10 @@ int processTCPConnections(int ownNodeId)
 	/* Main loop */
 	while(true)
 	{
+#ifdef DEBUG
+		printf("DEBUG: Listening.....\n");
+#endif // DEBUG
+
 		read_fds = master; /* Copy it */
 
 		if (select(fdmax+1, &read_fds, NULL, NULL, NULL) == -1)
@@ -242,13 +264,16 @@ int processTCPConnections(int ownNodeId)
 
 					if (newfd == -1)
 					{
-						perror("Error: processTCPConnections, accept failed\n");
+						printf("ERROR: processTCPConnections, accept failed\n");
 					}
 					else
 					{
 						/*
 						 * Update the new file descriptor in node's database which will used for future communication
 						 */
+
+						printf("DEBUG: New connection estabished, fd:%d\n", newfd);
+
 						if(updateScoketDescInNodeDB((struct sockaddr *)&remoteaddr, newfd) == -1)
 						{
 							exit(1);
@@ -265,7 +290,9 @@ int processTCPConnections(int ownNodeId)
 				}
 				else
 				{
-					//printf("DEBUG: Data received by the node\n");
+#ifdef DEBUG
+					printf("DEBUG: Data received by the node\n");
+#endif // DEBUG
 
 					memset(buffer, 0, 100);			/* Clear buffer before use */
 
@@ -282,20 +309,57 @@ int processTCPConnections(int ownNodeId)
 					{
 						messageSize = sizeof(connectRequest) - sizeof(messageId);
 
-						if(-1 == receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize))
+						if(receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize) == -1)
 						{
-							printf("ERROR: processTCPConnections, could receive only %d bytes\n", messageSize);
+							printf("ERROR: processTCPConnections, ConnectionRequest could receive only %d bytes\n", messageSize);
 							exit(1);
 						}
 
 						memcpy(&connectRequest, buffer, messageSize);
-						printf("INFO: ConnectRequest received MessageId: %d\n", connectRequest.messageId);
+
+						/* Extract nodeId */
+						nodeId =	connectRequest.nodeInformation.nodeId;
+
+						printf("INFO: ConnectRequest received from NodeId:%d Host:%s\n",
+								nodeId,
+								connectRequest.nodeInformation.hostName);
+
+						/* Send connection response */
+						/* Clear buffer */
+						memset(buffer,0,sizeof(buffer));
+
+						/* Form the message */
+						connectResponse.messageId = ConnectionResponse;
+						connectResponse.nodeId	=	ownNodeId;
+						connectResponse.routeInformation.nodeId = ownNodeId;
+						connectResponse.routeInformation.messageId = RouteInformation;
+
+						/* Get the size */
+						messageSize = sizeof(connectResponse);
+
+						memcpy(buffer, &connectResponse, messageSize);
+
+						if((sendDataOnTCP(ix, buffer, &messageSize)) == -1)
+						{
+							printf("ERROR: processTCPConnections, ConnectionResponse could send only (%d/%d) bytes\n",
+									messageSize,
+									sizeof(connectResponse));
+
+							exit(1);
+						}
+						else
+						{
+							printf("DEBUG: ConnectionResp sent to NodeId:%d, (%d/%d) bytes\n",
+									nodeId,
+									messageSize,
+									sizeof(connectResponse));
+						}
 					}
 					else if(messageId == RouteInformation)
 					{
 						messageSize = sizeof(routeInformation) - sizeof(messageId);
 
-						if(-1 == receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize))
+						if(receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize) == -1)
 						{
 							printf("ERROR: processTCPConnections, could receive only %d bytes\n", messageSize);
 							exit(1);
@@ -303,40 +367,59 @@ int processTCPConnections(int ownNodeId)
 
 						memcpy(&routeInformation, buffer, messageSize);
 
-						printf("INFO: RouteInformation received MessageId: %d NodeId:%d\n",
-								routeInformation.messageId,
+						printf("INFO: RouteInformation received NodeId:%d\n",
 								routeInformation.nodeId);
+
+						/*
+						 *	Update your routing table with information from neighbor nodes
+						 *	If any route has changed OR degree of any node has changed
+						 *		Send RouteInformation to neighbors
+						 *	If not, ignore
+						 */
+
+						/* For the time being I am sending RouteInformation to all my neighbors always */
+						for(jx=1 ; jx<MAX_NUMBER_OF_NODES ; jx++)
+						{
+							if((nodeInformation[jx].nodeId != routeInformation.nodeId) && (nodeInformation[jx].tcpSocketFd != -1))
+							{
+								if(sendRouteUpdate(nodeInformation[jx].nodeId, ownNodeId) == -1)
+								{
+									exit(1);
+								}
+							}
+						}
+					}
+					else if(messageId == ConnectionResponse)
+					{
+						messageSize = sizeof(connectResponse) - sizeof(messageId);
+
+						if(receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize) == -1)
+						{
+							printf("ERROR: processTCPConnections, could receive only %d bytes\n", messageSize);
+							exit(1);
+						}
+
+						memcpy(&connectResponse, buffer, messageSize);
+
+						printf("DEBUG: Received connection response from NodeId:%d\n",connectResponse.nodeId);
+
+						/* Update your database here.....
+						 * 1. Distance Vector.
+						 * 2. Degree Vector
+						 */
+
+						/* Signal the UDP thread */
+						if((rv = sem_post(&sem_connectRespWait)) == -1)
+						{
+							printf("ERROR: processTCPConnections, semaphore failed while posting, ECODE:%s\n",
+									gai_strerror(rv));
+							exit(1);
+						}
 					}
 					else
 					{
 						printf("ERROR: Incorrect message id received, %d\n", messageId);
 					}
-
-
-#if 0
-					/* Receive data from one of the nodes */
-					if ((numberOfBytesReceived = recv(i, &inMessage, sizeof inMessage, 0)) <= 0)
-					{
-						/* got error or connection closed by client */
-						if (numberOfBytesReceived == 0)
-						{
-							/* Connection closed */
-							printf("Error: processTCPConnections, node %d hung up\n", i);
-						}
-						else
-						{
-							perror("Error: processTCPConnections, recv FAILED\n");
-						}
-
-						close(i);
-
-						FD_CLR(i, &master); /* Remove from Master file descriptor set */
-					}
-					else /* Valid data from a node */
-					{
-						printf("DEBUG: Data received by the node");
-					}
-#endif
 				}
 			} /* END got new incoming connection */
 		} /* END looping through file descriptors */
@@ -368,7 +451,7 @@ int updateScoketDescInNodeDB(struct sockaddr *pSockAddr, int fileDescriptor)
 
 	if(returnValue == -1)
 	{
-		perror("Error: updateFileDescriptorInNodeInformation, getnameinfo failed\n");
+		printf("ERROR: updateFileDescriptorInNodeInformation, getnameinfo failed\n");
 		return -1;
 	}
 
@@ -391,27 +474,77 @@ int updateScoketDescInNodeDB(struct sockaddr *pSockAddr, int fileDescriptor)
 /*************************************************************************
  /** createSocketAndBindAddress: Function to create a socket to listen and bind address
   *
-  * @param[in] nodeId Id of the current node
+  * @param[in] ownNodeId: Id of the current node
+  *
+  * @param[in] connectionType: TCP or UDP connection
+  *
+  * @param[in] isServer: Indicates if the UDP connection is server or client
+  *
+  * @param[in] toNodeId: If the connection is for a UDP client, this mentions the destination nodeId
   *
   * @return -1 if error
   *
  ************************************************************************/
-int createSocketAndBindAddress(int nodeId)
+int createSocketAndBindAddress(int ownNodeId, int connectionType, int isServer, int toNodeId)
 {
 	int listener;
 	int reUsePort = 1;
 	struct addrinfo tempSocketInfo, *finalSocketInfo, *iSocketLoopIter;
+	int rv;
 
 	(void) memset(&tempSocketInfo, 0, sizeof tempSocketInfo);
 
 	tempSocketInfo.ai_family 	= AF_UNSPEC; 			/* Don't care IPv4 or IPv6 */
-	tempSocketInfo.ai_socktype 	= SOCK_STREAM;	 		/* TCP stream sockets */
-	tempSocketInfo.ai_flags 	= AI_PASSIVE;			/* Fill IP Address for you */
 
-	if((getaddrinfo(NULL, nodeInformation[nodeId].tcpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
+	if(connectionType == TCP_CONNECTION)
 	{
-		perror("ERROR: createSocketAndBindAddress, getaddrinfo failed\n");
-		return -1;
+		/* TCP Connection */
+		tempSocketInfo.ai_socktype 	= SOCK_STREAM;	 		/* TCP stream sockets */
+		tempSocketInfo.ai_flags 	= AI_PASSIVE;			/* Fill IP Address for you */
+
+		if((rv = getaddrinfo(NULL, nodeInformation[ownNodeId].tcpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
+		{
+			printf("ERROR: createSocketAndBindAddress, getaddrinfo failed, Error: %s, Connection:%d\n",
+					gai_strerror(rv),
+					connectionType);
+
+			return -1;
+		}
+	}
+	else
+	{
+		/* UDP Connection */
+		tempSocketInfo.ai_socktype 	= SOCK_DGRAM;	 		/* UDP sockets */
+
+		if(isServer == CLIENT)
+		{
+			if((rv = getaddrinfo(nodeInformation[toNodeId].hostName, nodeInformation[toNodeId].udpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
+			{
+				printf("ERROR: createSocketAndBindAddress, getaddrinfo failed, Error: %s, Connection:%d\n",
+						gai_strerror(rv),
+						connectionType);
+
+				return -1;
+			}
+		}
+		else
+		{
+			/* UDP - Server */
+			tempSocketInfo.ai_flags 	= AI_PASSIVE;			/* Fill IP Address for you */
+
+#ifdef DEBUG
+			printf("DEBUG: Server listening on port:%s\n", nodeInformation[ownNodeId].udpPortNumber);
+#endif //DEBUG
+
+			if((rv = getaddrinfo(NULL, nodeInformation[ownNodeId].udpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
+			{
+				printf("ERROR: createSocketAndBindAddress, getaddrinfo failed, Error: %s, Connection:%d\n",
+						gai_strerror(rv),
+						connectionType);
+
+				return -1;
+			}
+		}
 	}
 
 	/* Loop through all valid values return by getaddrinfo() */
@@ -427,10 +560,14 @@ int createSocketAndBindAddress(int nodeId)
 		/* Changing socket options to make sure the ports can be reused */
 		setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &reUsePort, sizeof(int));
 
-		if (bind(listener, iSocketLoopIter->ai_addr, iSocketLoopIter->ai_addrlen) < 0)
+		/* We need bind only for TCP connection */
+		if(isServer == SERVER)
 		{
-			close(listener);
-			continue;
+			if (bind(listener, iSocketLoopIter->ai_addr, iSocketLoopIter->ai_addrlen) < 0)
+			{
+				close(listener);
+				continue;
+			}
 		}
 		break;
 	}
@@ -447,3 +584,308 @@ int createSocketAndBindAddress(int nodeId)
 	return listener;
 }
 
+/****************************************************************************************
+ /** sendJoinReq: Function to send join request to m nodes
+  *
+  * @param[in] toNodeId: The node ID of the node which is the recipient of JoinReq message
+  *
+  * @param[in] ownNodeId: Own node Id
+  *
+  * @param[in] *SJoinResponse: This structure should be populated by the function
+  *                            which has information about the nodes to which it should
+  *                            establish TCP connections
+  *
+  * @return 0 if PASSED or -1 if FAILED
+ *
+ ****************************************************************************************/
+int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
+{
+	char 	hostName[MAX_CHARACTERS_IN_HOSTNAME]; 				/* Host name of the node */
+	char 	udpPortNumber[MAX_CHARACTERS_IN_PORTNUMBER];        /* Port number of the node */
+	int 	udpSockfd;
+	int 	tcpSocket;
+	struct 	addrinfo hints, *servinfo, *p;
+	int 	rv;
+	int 	numbytes;
+	int 	ix;
+	int		nodeId;
+	mJoinRequest joinRequest;
+
+	/* Get lock before accessing node database */
+	pthread_mutex_lock(&mutex_nodeDB);
+	strcpy(hostName, nodeInformation[toNodeId].hostName);
+	strcpy(udpPortNumber, nodeInformation[toNodeId].udpPortNumber);
+	pthread_mutex_unlock(&mutex_nodeDB);
+
+#ifdef DEBUG
+	printf("DEBUG: sendJoinReq, host:%s, Port:%s\n", hostName, udpPortNumber);
+#endif // DEBUG
+
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family 	= AF_UNSPEC;
+	hints.ai_socktype 	= SOCK_DGRAM;
+	hints.ai_flags		= AI_PASSIVE;				/* Use my IP */
+
+	if ((rv = getaddrinfo(hostName, udpPortNumber, &hints, &servinfo)) != 0)
+	{
+		printf("ERROR: sendJoinReq, Host:%s UDPPort:%s getaddrinfo: ECODE: %s, Return Value:%d, ERROR:%s\n",
+				hostName,
+				udpPortNumber,
+				strerror(errno),
+				rv,
+				gai_strerror(rv));
+
+		return -1;
+	}
+
+	// loop through all the results and make a socket
+	for(p = servinfo; p != NULL; p = p->ai_next)
+	{
+		if ((udpSockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+		{
+			printf("DEBUG: Missed a socket\n");
+			continue;
+		}
+
+		break;
+	}
+
+	if (p == NULL)
+	{
+		printf("ERROR: sendJoinReq: failed to bind socket\n");
+		return -1;
+	}
+
+	/* Form the Join Message - Only the message and the node information is important */
+	joinRequest.messageId = JoinRequest;
+	joinRequest.nodeInformation.nodeId = ownNodeId;
+	strcpy(joinRequest.nodeInformation.hostName,nodeInformation[ownNodeId].hostName);
+	strcpy(joinRequest.nodeInformation.tcpPortNumber,"");
+	strcpy(joinRequest.nodeInformation.udpPortNumber,"");
+	joinRequest.nodeInformation.tcpSocketFd = -1;
+
+#ifdef DEBUG
+	printf("DEBUG: ID:%d Sending JoinReq, contents Name:%s\n", ownNodeId, nodeInformation[ownNodeId].hostName);
+#endif // DEBUG
+
+	/* Send the JoinReq message */
+	if ((numbytes = sendto(udpSockfd, &joinRequest, sizeof(joinRequest), 0, p->ai_addr, p->ai_addrlen)) == -1)
+	{
+		printf("ERROR: sendJoinReq, failed to send JoinReq (%d/%d) bytes sent, %s",
+				numbytes,
+				sizeof(joinRequest),
+				gai_strerror(numbytes));
+
+		return -1;
+	}
+	else
+	{
+		printf("DEBUG: JoinReq sent to %s, sent (%d/%d) bytes\n", hostName, numbytes, sizeof(joinRequest));
+	}
+
+	/* Now block on receive and return back to the sender */
+	if ((numbytes = recvfrom(udpSockfd, joinResponse, sizeof(mJoinResponse) , 0, 0, 0)) == -1)
+	{
+		printf("ERROR: sendJoinReq, failure in receiving, received (%d/%d) bytes, error %s",
+				numbytes,
+				sizeof(mJoinResponse),
+				strerror(errno));
+
+		return -1;
+	}
+	else
+	{
+		printf("DEBUG: JoinResponse message received. M:%d Host1:%s Host2:%s\n",
+				joinResponse->nodeCount,
+				joinResponse->nodeInformation[0].hostName,
+				joinResponse->nodeInformation[1].hostName);
+	}
+
+	/* Create new TCP connections to those new nodes */
+	for(ix=0 ; ix<joinResponse->nodeCount ; ix++)
+	{
+		nodeId = joinResponse->nodeInformation[ix].nodeId;
+
+		/* Connect with each node */
+		if((tcpSocket = connectToNewNode(joinResponse->nodeInformation[ix].hostName, joinResponse->nodeInformation[ix].tcpPortNumber)) == -1)
+		{
+			return -1;
+		}
+
+		/* Store socket information in Node Database */
+		nodeInformation[nodeId].tcpSocketFd = tcpSocket;												/* NodeId */
+
+		printf("DEBUG: UpdateNodeDb, NodeId:%d Socket:%d\n", nodeId, nodeInformation[nodeId].tcpSocketFd);
+
+		strcpy(nodeInformation[nodeId].hostName, joinResponse->nodeInformation[ix].hostName);			/* HostName */
+		strcpy(nodeInformation[nodeId].tcpPortNumber, joinResponse->nodeInformation[ix].tcpPortNumber);	/* TCP Port */
+		strcpy(nodeInformation[nodeId].udpPortNumber, joinResponse->nodeInformation[ix].udpPortNumber);	/* UDP Port */
+	}
+
+	/* Signal to TCP thread to start listening to incomming data on TCP connection */
+	if((rv = sem_post(&sem_startTcpConListen)) == -1)
+	{
+		printf("ERROR: sendJoinReq, semaphore failed while posting, ECODE:%s\n",
+				gai_strerror(rv));
+		exit(1);
+	}
+
+	/* Clear the resources */
+	freeaddrinfo(servinfo);
+	close(udpSockfd);
+
+	return 0;
+}
+
+/****************************************************************************************
+ /** connectToNewNode: Function to establish TCP connection with nodes
+  *
+  * @param[in] hostName: 	Host name of the new node
+  *
+  * @param[in] tcpPort: 	TCP Port number of the new node
+  *
+ ****************************************************************************************/
+int connectToNewNode(char *hostName, char *TcpPortNumber)
+{
+	int returngetaddrinfo;
+	int rv;
+	struct addrinfo tempSocketInfo, *finalSocketInfo, *iSocketLoopIter;
+	int socketfd;
+
+	(void) memset(&tempSocketInfo, 0, sizeof tempSocketInfo); 	/* Remember this, this COSTED you much */
+	tempSocketInfo.ai_family 	=   AF_UNSPEC; 					/* Don't care IPv4 or IPv6 */
+	tempSocketInfo.ai_socktype 	=   SOCK_STREAM; 				/* TCP stream sockets */
+
+	if((returngetaddrinfo = getaddrinfo(hostName, TcpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
+	{
+		printf("Error: connectToNewNode ECODE %s for %s Port %s\n", gai_strerror(returngetaddrinfo), hostName,
+				TcpPortNumber);
+
+		return -1;
+	}
+
+	/* Loop through all valid values return by getaddrinfo() */
+	for(iSocketLoopIter = finalSocketInfo ; iSocketLoopIter != NULL ; iSocketLoopIter = iSocketLoopIter->ai_next)
+	{
+		if ((socketfd = socket(iSocketLoopIter->ai_family, iSocketLoopIter->ai_socktype, iSocketLoopIter->ai_protocol)) == -1)
+		{
+			perror("Error: Socket connection failed\n");
+			continue;
+		}
+
+		if ((rv = connect(socketfd, iSocketLoopIter->ai_addr, iSocketLoopIter->ai_addrlen)) == -1)
+		{
+			close(socketfd);
+
+#ifdef DEBUG
+			printf("Node %s CANT connect to %s, ErrorCode %s\n", hostName, nodeInformation[ix].hostName, ga_strerror(rv));
+#endif
+			continue;
+		}
+		else
+		{
+			/* Connection established */
+			printf("Connected to %s\n", hostName);
+		}
+
+		break;
+	}
+
+	freeaddrinfo(finalSocketInfo);
+
+	return socketfd;
+}
+
+/****************************************************************************************
+ /** sendConnectReq: Function to send connect request to m nodes
+  *
+  * @param[in] toNodeId: The node ID of the node which is the recipient of ConnectReq message
+  *
+  * @param[in] ownNodeId: Own node Id
+  *
+  * @return 0 if PASSED or -1 if FAILED
+ *
+ ****************************************************************************************/
+int sendConnectReq(int toNodeId, int ownNodeId)
+{
+	mConnectRequest connectRequest;
+	char sendBuffer[100];
+	int tcpSocketFd;
+	int sentBytes = 0;
+
+	/* Form the message */
+	connectRequest.messageId = ConnectionRequest;
+	connectRequest.nodeInformation.nodeId = ownNodeId;
+	strcpy(connectRequest.nodeInformation.hostName, nodeInformation[ownNodeId].hostName);
+
+	tcpSocketFd = nodeInformation[toNodeId].tcpSocketFd;
+
+	printf("DEBUG: sendConnectReq, NodeId:%d Socket:%d\n", toNodeId, nodeInformation[toNodeId].tcpSocketFd);
+
+	sentBytes = sizeof(connectRequest);
+
+	/* Clear sendBuffer before using it */
+	memset(sendBuffer,0, sizeof(sendBuffer));
+
+	/* Copy the date to be trasnmitted */
+	memcpy(sendBuffer, &connectRequest, sentBytes);
+
+	if(sendDataOnTCP(tcpSocketFd, sendBuffer, &sentBytes) == -1)
+	{
+		printf("ERROR: sendConnectReq, Can't send ConnectReq, (%d/%d) bytes sent\n",
+				sentBytes/sizeof(connectRequest));
+
+		return -1;
+	}
+	else
+	{
+		printf("DEBUG: ConnectReq sent to host:%s\n", nodeInformation[toNodeId].hostName);
+	}
+
+	return 0;
+}
+
+/****************************************************************************************
+ /** sendRouteUpdate: Function to send RouteUpdate to immediate neighbors
+  *
+  * @param[in] toNodeId: The node ID of the node which is the recipient of RouteUpdate message
+  *
+  * @param[in] ownNodeId: Own node Id
+  *
+  * @return 0 if PASSED or -1 if FAILED
+ *
+ ****************************************************************************************/
+int sendRouteUpdate(int toNodeId, int ownNodeId)
+{
+	mRouteInformation routeInformation;
+	int tcpSocketFd;
+	int sendBytes;
+	char sendBuffer[100];
+
+	/* Prepare the message */
+	routeInformation.messageId = RouteInformation;
+	routeInformation.nodeId = ownNodeId;
+
+	/* Get the socket fd from database */
+	tcpSocketFd = nodeInformation[toNodeId].tcpSocketFd;
+
+	/* Clear data */
+	memset(sendBuffer, 0, 100);
+
+	sendBytes = sizeof(routeInformation);
+
+	memcpy(sendBuffer, &routeInformation, sendBytes);
+
+	if(sendDataOnTCP(tcpSocketFd, sendBuffer, &sendBytes) == -1)
+	{
+		printf("ERROR: sendRouteUpdate, Failure in sending RouteInformaton, (%d/%d) bytes sent\n",
+				sendBytes, sizeof(routeInformation));
+		return -1;
+	}
+	else
+	{
+		printf("DEBUG: RouteInformation sent to Host:%s\n", nodeInformation[toNodeId].hostName);
+	}
+
+	return 0;
+}

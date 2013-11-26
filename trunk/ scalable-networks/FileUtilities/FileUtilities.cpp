@@ -30,6 +30,7 @@ int initializeNodeDB(char *nodeInfoFile)
 	int nodeId;
 	char *token;
 	int index 		= 0;
+	int length = 0;
 
 	/* File name validation */
 	if(nodeInfoFile == NULL)
@@ -95,6 +96,10 @@ int initializeNodeDB(char *nodeInfoFile)
 		nodeInformation[nodeId].nodeId = atoi(nodeFields[0]);		/* NodeId */
 		strcpy(nodeInformation[nodeId].hostName, nodeFields[1]);	/* HostName */
 		strcpy(nodeInformation[nodeId].tcpPortNumber, nodeFields[2]);	/* TCP Port */
+
+		/* UDP port had newline character with it - Problem, to solve it remove the newline character */
+		nodeFields[3][strlen(nodeFields[3])-1] = '\0';
+
 		strcpy(nodeInformation[nodeId].udpPortNumber, nodeFields[3]);	/* UDP Port */
 
 		nodeInformation[nodeId].tcpSocketFd = -1;
