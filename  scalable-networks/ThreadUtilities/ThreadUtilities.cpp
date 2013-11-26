@@ -15,6 +15,8 @@ extern pthread_t udpEntryHandlerThread;
 extern pthread_mutex_t mutex_nodeDB;
 extern SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 extern int primeNode;
+extern sem_t sem_connectRespWait;
+extern sem_t sem_startTcpConListen;
 
 /*********************************************************************************************************
  /** spawnUdpThreadForQueries: Function to spawn a thread to handle UDP messages for node queries
@@ -141,11 +143,22 @@ int dummyConnectionCreator(int nodeId)
 void *handleNodeEntry(void *data)
 {
 	int *inData = (int *) data;
-	int nodeId = *inData;
+	int ownNodeId = *inData;
 	int messageSize = -1;
 	mConnectRequest connectRequest;
 	mRouteInformation routeInformation;
+	mJoinResponse joinResponse;
+	mJoinRequest joinRequest;
 	char buffer[100]; /* Need to fix the size of this buffer */
+	struct sockaddr senderAddress;
+	socklen_t addr_len;
+	int recvBytes;
+	int sentBytes;
+	int socketfd;
+	int ix;
+	int nodeId;
+	int numOfConnectionRespReceived = 0;
+	int rv;
 
 	printf("INFO: UDP Thread for handling Node Entry\n");
 
@@ -164,74 +177,113 @@ void *handleNodeEntry(void *data)
 
 	if(primeNode == 0)
 	{
-		/* Send JoinReq to one of the prime nodes */
+		/* Send JoinReq randomly to some prime node - Below its always sent to the first node */
+		/* << Place Holder >> */
 
-		/* Wait for JoinResp from the prime node */
-
-		/* Send ConnectReq to m nodes */
-		/* Form the ConnectReq message */
-		connectRequest.messageId = ConnectionRequest;
-
-		/* Get lock before accessing the node database */
-		pthread_mutex_lock(&mutex_nodeDB);
-		connectRequest.nodeInformation.nodeId = nodeId;
-		connectRequest.nodeInformation.tcpSocketFd = -1;  /* THis field is not used by the receiver */
-		strcpy(connectRequest.nodeInformation.hostName, nodeInformation[nodeId].hostName);
-		strcpy(connectRequest.nodeInformation.tcpPortNumber, nodeInformation[nodeId].tcpPortNumber);
-		strcpy(connectRequest.nodeInformation.udpPortNumber, nodeInformation[nodeId].udpPortNumber);
-
-		/* The message is formed now, we need to send it to one of the prime node */
-		/* For testing purpose send it to the first node */
-		messageSize = sizeof(connectRequest);
-
-		memset(buffer, 0, messageSize);					/* Clear the buffer before use */
-		memcpy(buffer, &connectRequest, messageSize);	/* Fill buffer */
-
-		/* Debug */
-		/* Create a TCP connection with node0 */
-		dummyConnectionCreator(1);
-
-		if(-1 == sendDataOnTCP(nodeInformation[1].tcpSocketFd, buffer, &messageSize))
+		/* Send JoinReq to one of the prime nodes and wait for JoinResp from it */
+		if(sendJoinReq(1, ownNodeId, &joinResponse) == -1)
 		{
-			printf("ERROR: handleNodeEntry, could send only %d bytes\n", messageSize);
-			exit(1);
+			exit(0);
 		}
 
-		pthread_mutex_unlock(&mutex_nodeDB);
-
-		/* Testing part 2 */
-		/* Send RouteInformation */
-		/* Prepare route information */
-		routeInformation.messageId = RouteInformation;
-		routeInformation.nodeId = nodeId;
-
-		messageSize = sizeof(routeInformation);
-
-		memset(buffer, 0, messageSize);					/* Clear the buffer before use */
-		memcpy(buffer, &routeInformation, messageSize);	/* Fill buffer */
-
-		/* Get lock before accessing the node database */
-		pthread_mutex_lock(&mutex_nodeDB);
-
-		if(-1 == sendDataOnTCP(nodeInformation[1].tcpSocketFd, buffer, &messageSize))
+		/* Send m ConnectReq messages */
+		/* For loop for sending m ConnectReq messages */
+		for(ix=0 ; ix<joinResponse.nodeCount ; ix++)
 		{
-			printf("ERROR: handleNodeEntry, could send only %d bytes\n", messageSize);
-			exit(1);
+			if(sendConnectReq(joinResponse.nodeInformation[ix].nodeId, ownNodeId) == -1)
+			{
+				exit(1);
+			}
 		}
-
-		pthread_mutex_unlock(&mutex_nodeDB);
-
-
 
 		/* Wait until we receive all m ConnectResp messages */
+		/* while loop for waiting for m ConnectResp messages */
 
+		numOfConnectionRespReceived = 0;
 
+		while(numOfConnectionRespReceived != joinResponse.nodeCount)
+		{
+			if((rv = sem_wait(&sem_connectRespWait)) == -1)
+			{
+				printf("ERROR: handleNodeEntry, semaphore failed while waiting, Error:%s\n", gai_strerror(rv));
+				exit(1);
+			}
+
+			numOfConnectionRespReceived++;
+		}
+
+		printf("DEBUG: Received all %d ConnectResponse\n", joinResponse.nodeCount);
+
+		/* Send the first RouteInformation message to neighbor nodes */
+		/* For loop for sending RouteInformation for m neighbors */
+		for(ix=0 ; ix<joinResponse.nodeCount ; ix++)
+		{
+			if(sendRouteUpdate(joinResponse.nodeInformation[ix].nodeId, ownNodeId) == -1)
+			{
+				exit(1);
+			}
+		}
 
 	}
 
+	/* Create a socket for listening to messages on UDP */
+	if((socketfd = createSocketAndBindAddress(ownNodeId, UDP_CONNECTION, SERVER, 0)) == -1)
+	{
+		printf("ERROR: handleNodeEntry, failed to create socket for UDP connections, error: %s", gai_strerror(socketfd));
+		exit(1);
+	}
+
 	/* General message handling section */
+	while(true)
+	{
+		addr_len = sizeof(senderAddress);
+
+#ifdef DEBUG
+		printf("Waiting for messages...\n");
+#endif //DEBUG
+
+		if ((recvBytes = recvfrom(socketfd, &joinRequest, sizeof(mJoinRequest), 0, &senderAddress, &addr_len)) == -1)
+		{
+			printf("ERROR: handleNodeEntry, recvfrom failed, Error:%s\n", gai_strerror(recvBytes));
+			exit(1);
+		}
+
+		printf("DEBUG: Received JoinRequest from %s, NodeId:%d\n",
+				joinRequest.nodeInformation.hostName,
+				joinRequest.nodeInformation.nodeId);
+
+		/* Barbasi Model Intelligence should be added here */
 
 
-	while(1);
+		/* For the time being select 2 nodes, node 4 and node 5 for new connection */
+		/* Prepare the message to be sent */
+		joinResponse.messageId = JoinResponse;
+		joinResponse.nodeCount = NODES_TO_JOIN;				/* M is 2, check Constants.h file */
+
+		/* Node 4 */
+		joinResponse.nodeInformation[0].nodeId = nodeInformation[4].nodeId;
+		strcpy(joinResponse.nodeInformation[0].hostName,nodeInformation[4].hostName);
+		strcpy(joinResponse.nodeInformation[0].tcpPortNumber, nodeInformation[4].tcpPortNumber);
+		strcpy(joinResponse.nodeInformation[0].udpPortNumber, nodeInformation[4].udpPortNumber);
+
+		/* Node 5 */
+		joinResponse.nodeInformation[1].nodeId = nodeInformation[5].nodeId;
+		strcpy(joinResponse.nodeInformation[1].hostName,nodeInformation[5].hostName);
+		strcpy(joinResponse.nodeInformation[1].tcpPortNumber, nodeInformation[5].tcpPortNumber);
+		strcpy(joinResponse.nodeInformation[1].udpPortNumber, nodeInformation[5].udpPortNumber);
+
+		/* Send the message */
+		if((sentBytes = sendto(socketfd, &joinResponse, sizeof(joinResponse), 0, &senderAddress, addr_len)) == -1)
+		{
+			printf("ERROR: handleNodeEntry, Can't send JoinResponse message, ECODE: %s\n", gai_strerror(sentBytes));
+			exit(1);
+		}
+		else
+		{
+			printf("DEBUG: JoinResponse sent to Host:%s NodeId:%d\n",
+					joinRequest.nodeInformation.hostName,
+					joinRequest.nodeInformation.nodeId);
+		}
+	}
 }
 

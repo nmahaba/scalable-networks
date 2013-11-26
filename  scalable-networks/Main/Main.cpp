@@ -12,6 +12,7 @@
 #include <Constants.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <semaphore.h>
 
 //#define DEBUG
 
@@ -24,6 +25,11 @@ int primeNode 							= 	0;
 
 /* Mutex */
 pthread_mutex_t mutex_nodeDB;
+
+/* Semaphore */
+/* For waiting until all ConnectResponse messages are received */
+sem_t sem_connectRespWait;
+sem_t sem_startTcpConListen;
 
 /***************** Thread attributes ****************/
 /* UDP NodeQuery thread */
@@ -83,7 +89,7 @@ void printConnectionInfo(int ownNodeId)
 
 
 /* Command line arguments
- * nodes.out nodeId nodeInformationFile connectionInfoFile*/
+ * nodes.out NodeId PrimeNode TCPPort UDPPort nodeInformationFile connectionInfoFile */
 
 /*
  * Main functionalities
@@ -103,11 +109,12 @@ int main(int argc, char **argv)
 	char nodeInformationFile[MAX_CHARACTERS_IN_FILENAME];
 	char connectionInfoFile[MAX_CHARACTERS_IN_FILENAME];
 	int ownNodeId = -1;
+	int rv;
 
 	/* Check command line arguments */
-	if(argc != 5)
+	if(argc != 7)
 	{
-		printf("ERROR: Invalid command line arguments\nnodes.out <<NodeId>> <<PrimeNode>> <<nodeInfoFile>> <<connectionInfoFile>>\n");
+		printf("ERROR: Invalid command line arguments\nnodes.out <<NodeId>> <<PrimeNode>> <<TCPPort>> <<UDPPort>> <<nodeInfoFile>> <<connectionInfoFile>>\n");
 		return -1;
 	}
 
@@ -115,14 +122,22 @@ int main(int argc, char **argv)
 	/* Store own node information */
 	ownNodeId = atoi(argv[1]);
 	primeNode = atoi(argv[2]);
-	strcpy(nodeInformationFile, argv[3]);
-	strcpy(connectionInfoFile, argv[4]);
+	strcpy(nodeInformationFile, argv[5]);
+	strcpy(connectionInfoFile, argv[6]);
 
 	/* Read the connections file and fill the database */
 	if(initializeNodeDB(nodeInformationFile) == -1)
 	{
 		return -1;
 	}
+
+	gethostname(nodeInformation[ownNodeId].hostName, MAX_CHARACTERS_IN_HOSTNAME);
+	strcpy(nodeInformation[ownNodeId].tcpPortNumber, argv[3]);
+	strcpy(nodeInformation[ownNodeId].udpPortNumber, argv[4]);
+
+#ifdef DEBUG
+	printf("INFO: Id:%d Own host information %s\n", ownNodeId, nodeInformation[ownNodeId].hostName);
+#endif // DEBUG
 
 #ifdef DEBUG
 	/* Debug function */
@@ -142,6 +157,19 @@ int main(int argc, char **argv)
 
 	/* Initialize Mutex and Semaphores */
 	pthread_mutex_init(&mutex_nodeDB, NULL);
+
+	if((rv = sem_init(&sem_connectRespWait, 0, 0)) == -1)
+	{
+		printf("ERROR: Main, semaphore creation failed for Semaphore - ConnectResp, Error:%s\n", gai_strerror(rv));
+		exit(1);
+	}
+
+	if((rv = sem_init(&sem_startTcpConListen, 0, 0)) == -1)
+	{
+		printf("ERROR: Main, semaphore creation failed for Semaphore - TCP Connection, Error:%s\n", gai_strerror(rv));
+		exit(1);
+	}
+
 
 	/* Establish connection with the prime nodes */
 	if(connectToPrimeNodes(ownNodeId) == -1)
