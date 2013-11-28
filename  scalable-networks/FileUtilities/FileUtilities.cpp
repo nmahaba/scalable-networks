@@ -17,6 +17,7 @@ extern int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vecto
 extern int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
 extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
 extern vector< vector<int> > AdjList;  						/* Used initially for calculating the DegV */
+extern pthread_mutex_t mutex_nodeDB;
 /* EXTERN declarations - END 	*/
 
 /****************************************************************************************
@@ -35,8 +36,8 @@ int initializeNodeDB(char *nodeInfoFile)
 	char nodeFields[4][50];
 	int nodeId;
 	char *token;
-	int index 		= 0;
-	int length = 0;
+	int index 					= 0;
+	int length 					= 0;
 
 	/* File name validation */
 	if(nodeInfoFile == NULL)
@@ -52,8 +53,12 @@ int initializeNodeDB(char *nodeInfoFile)
 	{
 		printf("ERROR: Cannot open node information file: %s\nErrorDesc: %s",
 				nodeInfoFile, strerror(errno));
+
 		return -1;
 	}
+
+	/* Get lock for NodeDB */
+	pthread_mutex_lock(&mutex_nodeDB);
 
 	/* Initialize the database */
 	for(nodeId=0 ; nodeId<MAX_NUMBER_OF_NODES ; nodeId++)
@@ -99,8 +104,8 @@ int initializeNodeDB(char *nodeInfoFile)
 		nodeId = atoi(nodeFields[0]);
 
 		/* Store the information in the database */
-		nodeInformation[nodeId].nodeId = atoi(nodeFields[0]);		/* NodeId */
-		strcpy(nodeInformation[nodeId].hostName, nodeFields[1]);	/* HostName */
+		nodeInformation[nodeId].nodeId = atoi(nodeFields[0]);			/* NodeId */
+		strcpy(nodeInformation[nodeId].hostName, nodeFields[1]);		/* HostName */
 		strcpy(nodeInformation[nodeId].tcpPortNumber, nodeFields[2]);	/* TCP Port */
 
 		/* UDP port had newline character with it - Problem, to solve it remove the newline character */
@@ -112,6 +117,9 @@ int initializeNodeDB(char *nodeInfoFile)
 	}
 	
 	fclose(fd_nodeInfoFile);
+
+	/* Release lock for NodeDB */
+	pthread_mutex_unlock(&mutex_nodeDB);
 
 	return 0;
 }
