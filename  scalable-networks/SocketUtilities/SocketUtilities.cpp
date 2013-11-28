@@ -9,7 +9,56 @@ extern pthread_mutex_t mutex_nodeDB;
 extern sem_t sem_connectRespWait;
 extern sem_t sem_startTcpConListen;
 extern int primeNode;
+extern int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
+extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
+extern int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
 /* EXTERN declarations - END 	*/
+
+/* Debug */
+static void printDistanceVector()
+{
+	int ix;
+
+	printf("Updated Distance Vector\n");
+
+	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	{
+		printf("%d ", DistV[ix]);
+	}
+	printf("\n");
+}
+
+/* Debug */
+static void printDegreeVector()
+{
+	int ix;
+
+	printf("Updated Degree Vector\n");
+
+	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	{
+		printf("%d ", DegV[ix]);
+	}
+	printf("\n");
+}
+
+/* Debug */
+static void printDVM()
+{
+	int ix,jx;
+
+	printf("Updated DVM\n");
+
+	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	{
+		for(jx=1 ; jx<MAX_NUMBER_OF_NODES ; jx++)
+		{
+			printf("%d ", DVM[ix][jx]);
+		}
+		printf("\n");
+	}
+	printf("\n");
+}
 
 /****************************************************************************************
  /** sendDataOnTCP: Function to send data completely
@@ -167,7 +216,7 @@ int processTCPConnections(int ownNodeId)
 	int numberOfBytesReceived = 0;  /* Number of bytes received by recv - If 0 then node has terminated connection */
 	fd_set master; 					/* Master file descriptor list */
 	fd_set read_fds; 				/* Temp file descriptor list for select() */
-	char buffer[100];
+	char buffer[200];
 	int messageSize	= -1;
 	eMessageId messageId;
 	mConnectRequest connectRequest;
@@ -176,6 +225,7 @@ int processTCPConnections(int ownNodeId)
 	int rv;
 	int nodeId;
 	int jx;
+	int routeUpdateResult;
 
 	socklen_t addrlen;
 	struct sockaddr_storage remoteaddr; /* Client address */
@@ -294,7 +344,7 @@ int processTCPConnections(int ownNodeId)
 					printf("DEBUG: Data received by the node\n");
 #endif // DEBUG
 
-					memset(buffer, 0, 100);			/* Clear buffer before use */
+					memset(buffer, 0, 200);			/* Clear buffer before use */
 
 					/* Read just the message type - 4 bytes */
 					recv(ix, &messageId, sizeof(messageId), 0);
@@ -377,14 +427,27 @@ int processTCPConnections(int ownNodeId)
 						 *	If not, ignore
 						 */
 
-						/* For the time being I am sending RouteInformation to all my neighbors always */
-						for(jx=1 ; jx<MAX_NUMBER_OF_NODES ; jx++)
+						routeUpdateResult = updateDVM(routeInformation);
+
+						if(routeUpdateResult > 0)
 						{
-							if((nodeInformation[jx].nodeId != routeInformation.nodeId) && (nodeInformation[jx].tcpSocketFd != -1))
+//#ifdef DEBUG
+#if 1
+							/* DEBUG - Print Distance Vector and Degree Vector */
+							printDistanceVector();
+
+							printDegreeVector();
+#endif // DEBUG
+
+							/* For the time being I am sending RouteInformation to all my neighbors always */
+							for(jx=1 ; jx<MAX_NUMBER_OF_NODES ; jx++)
 							{
-								if(sendRouteUpdate(nodeInformation[jx].nodeId, ownNodeId) == -1)
+								if((nodeInformation[jx].nodeId != routeInformation.nodeId) && (nodeInformation[jx].tcpSocketFd != -1))
 								{
-									exit(1);
+									if(sendRouteUpdate(nodeInformation[jx].nodeId, ownNodeId) == -1)
+									{
+										exit(1);
+									}
 								}
 							}
 						}
@@ -418,7 +481,7 @@ int processTCPConnections(int ownNodeId)
 					}
 					else
 					{
-						printf("ERROR: Incorrect message id received, %d\n", messageId);
+						printf("ERROR: processTCPConnections, Incorrect message id received, %d\n", messageId);
 					}
 				}
 			} /* END got new incoming connection */
@@ -809,7 +872,7 @@ int connectToNewNode(char *hostName, char *TcpPortNumber)
 int sendConnectReq(int toNodeId, int ownNodeId)
 {
 	mConnectRequest connectRequest;
-	char sendBuffer[100];
+	char sendBuffer[200];
 	int tcpSocketFd;
 	int sentBytes = 0;
 
@@ -860,17 +923,19 @@ int sendRouteUpdate(int toNodeId, int ownNodeId)
 	mRouteInformation routeInformation;
 	int tcpSocketFd;
 	int sendBytes;
-	char sendBuffer[100];
+	char sendBuffer[200];
 
 	/* Prepare the message */
-	routeInformation.messageId = RouteInformation;
-	routeInformation.nodeId = ownNodeId;
+	routeInformation.messageId 	= RouteInformation;
+	routeInformation.nodeId 	= ownNodeId;
+	memcpy(routeInformation.newDegV, DegV, sizeof(DegV));
+	memcpy(routeInformation.newDistV, DistV, sizeof(DistV));
 
 	/* Get the socket fd from database */
 	tcpSocketFd = nodeInformation[toNodeId].tcpSocketFd;
 
 	/* Clear data */
-	memset(sendBuffer, 0, 100);
+	memset(sendBuffer, 0, 200);
 
 	sendBytes = sizeof(routeInformation);
 
