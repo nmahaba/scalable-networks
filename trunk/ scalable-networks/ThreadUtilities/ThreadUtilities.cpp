@@ -223,67 +223,74 @@ void *handleNodeEntry(void *data)
 				exit(1);
 			}
 		}
-
 	}
-
-	/* Create a socket for listening to messages on UDP */
-	if((socketfd = createSocketAndBindAddress(ownNodeId, UDP_CONNECTION, SERVER, 0)) == -1)
+	else
 	{
-		printf("ERROR: handleNodeEntry, failed to create socket for UDP connections, error: %s", gai_strerror(socketfd));
-		exit(1);
-	}
-
-	/* General message handling section */
-	while(true)
-	{
-		addr_len = sizeof(senderAddress);
-
-#ifdef DEBUG
-		printf("Waiting for messages...\n");
-#endif //DEBUG
-
-		if ((recvBytes = recvfrom(socketfd, &joinRequest, sizeof(mJoinRequest), 0, &senderAddress, &addr_len)) == -1)
+		/* Create a socket for listening to messages on UDP */
+		if((socketfd = createSocketAndBindAddress(ownNodeId, UDP_CONNECTION, SERVER, 0)) == -1)
 		{
-			printf("ERROR: handleNodeEntry, recvfrom failed, Error:%s\n", gai_strerror(recvBytes));
-			exit(1);
-		}
-
-		printf("DEBUG: Received JoinRequest from %s, NodeId:%d\n",
-				joinRequest.nodeInformation.hostName,
-				joinRequest.nodeInformation.nodeId);
-
-		/* Barbasi Model Intelligence should be added here */
-
-
-		/* For the time being select 2 nodes, node 4 and node 5 for new connection */
-		/* Prepare the message to be sent */
-		joinResponse.messageId = JoinResponse;
-		joinResponse.nodeCount = NODES_TO_JOIN;				/* M is 2, check Constants.h file */
-
-		/* Node 4 */
-		joinResponse.nodeInformation[0].nodeId = nodeInformation[4].nodeId;
-		strcpy(joinResponse.nodeInformation[0].hostName,nodeInformation[4].hostName);
-		strcpy(joinResponse.nodeInformation[0].tcpPortNumber, nodeInformation[4].tcpPortNumber);
-		strcpy(joinResponse.nodeInformation[0].udpPortNumber, nodeInformation[4].udpPortNumber);
-
-		/* Node 5 */
-		joinResponse.nodeInformation[1].nodeId = nodeInformation[5].nodeId;
-		strcpy(joinResponse.nodeInformation[1].hostName,nodeInformation[5].hostName);
-		strcpy(joinResponse.nodeInformation[1].tcpPortNumber, nodeInformation[5].tcpPortNumber);
-		strcpy(joinResponse.nodeInformation[1].udpPortNumber, nodeInformation[5].udpPortNumber);
-
-		/* Send the message */
-		if((sentBytes = sendto(socketfd, &joinResponse, sizeof(joinResponse), 0, &senderAddress, addr_len)) == -1)
-		{
-			printf("ERROR: handleNodeEntry, Can't send JoinResponse message, ECODE: %s\n", gai_strerror(sentBytes));
+			printf("ERROR: handleNodeEntry, failed to create socket for UDP connections, error: %s", gai_strerror(socketfd));
 			exit(1);
 		}
 		else
 		{
-			printf("DEBUG: JoinResponse sent to Host:%s NodeId:%d\n",
+			printf("DEBUG: handleNodeEntry, fd:%d created for UDP message handling\n", socketfd);
+		}
+
+		/* General message handling section */
+		while(true)
+		{
+			addr_len = sizeof(senderAddress);
+
+#ifdef DEBUG
+			printf("Waiting for messages...\n");
+#endif //DEBUG
+
+			if ((recvBytes = recvfrom(socketfd, &joinRequest, sizeof(mJoinRequest), 0, &senderAddress, &addr_len)) == -1)
+			{
+				printf("ERROR: handleNodeEntry, recvfrom failed, Error:%s\n", gai_strerror(recvBytes));
+				exit(1);
+			}
+
+			printf("DEBUG: Received JoinRequest from %s, NodeId:%d\n",
 					joinRequest.nodeInformation.hostName,
 					joinRequest.nodeInformation.nodeId);
+
+			/* Barbasi Model Intelligence should be added here */
+
+
+			/* For the time being select 2 nodes, node 4 and node 5 for new connection */
+			/* Prepare the message to be sent */
+			joinResponse.messageId = JoinResponse;
+			joinResponse.nodeCount = NODES_TO_JOIN;				/* M is 2, check Constants.h file */
+
+			/* Node 4 */
+			joinResponse.nodeInformation[0].nodeId = nodeInformation[4].nodeId;
+			strcpy(joinResponse.nodeInformation[0].hostName,nodeInformation[4].hostName);
+			strcpy(joinResponse.nodeInformation[0].tcpPortNumber, nodeInformation[4].tcpPortNumber);
+			strcpy(joinResponse.nodeInformation[0].udpPortNumber, nodeInformation[4].udpPortNumber);
+
+			/* Node 5 */
+			joinResponse.nodeInformation[1].nodeId = nodeInformation[5].nodeId;
+			strcpy(joinResponse.nodeInformation[1].hostName,nodeInformation[5].hostName);
+			strcpy(joinResponse.nodeInformation[1].tcpPortNumber, nodeInformation[5].tcpPortNumber);
+			strcpy(joinResponse.nodeInformation[1].udpPortNumber, nodeInformation[5].udpPortNumber);
+
+			/* Send the message */
+			if((sentBytes = sendto(socketfd, &joinResponse, sizeof(joinResponse), 0, &senderAddress, addr_len)) == -1)
+			{
+				printf("ERROR: handleNodeEntry, Can't send JoinResponse message, ECODE: %s\n", gai_strerror(sentBytes));
+				exit(1);
+			}
+			else
+			{
+				printf("DEBUG: JoinResponse sent to Host:%s NodeId:%d\n",
+						joinRequest.nodeInformation.hostName,
+						joinRequest.nodeInformation.nodeId);
+			}
 		}
 	}
+
+	printf("INFO: UDP Thread exiting\n");
 }
 

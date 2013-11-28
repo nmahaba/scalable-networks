@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <signal.h>
 
 //#define DEBUG
 
@@ -49,22 +50,29 @@ pthread_t udpEntryHandlerThread;
 /* Global variables - End   */
 
 /* Debug functions */
-void printNodeDB(int ownNodeId)
+static void printNodeDB()
 {
 	int index = 0;
 
+	/* Get lock for NodeDB */
+	pthread_mutex_lock(&mutex_nodeDB);
+
 	printf("*****************************************\n");
-	printf("NodeId\tHostName\tTCPPort\tUDPPort\n");
+	printf("NodeId\tHostName\tTCPPort\tUDPPort\tTCPPort\n");
 	printf("*****************************************\n");
 
 	for(index=1 ; index<MAX_NUMBER_OF_NODES ; index++)
 	{
-		printf("%s %15s %10s %10s\n",
+		printf("%d %15s %10s %10s %d\n",
 				nodeInformation[index].nodeId,
 				nodeInformation[index].hostName,
 				nodeInformation[index].tcpPortNumber,
-				nodeInformation[index].udpPortNumber);
+				nodeInformation[index].udpPortNumber,
+				nodeInformation[index].tcpSocketFd);
 	}
+
+	/* Release lock for NodeDB */
+	pthread_mutex_unlock(&mutex_nodeDB);
 }
 
 /* Debug functions */
@@ -85,6 +93,11 @@ void printConnectionInfo(int ownNodeId)
 		}
 	}
 	printf("\n");
+}
+
+void sigPipeHandler(int signum)
+{
+	printf("ERROR: SIGPIPE Signal received\n");
 }
 
 /*
@@ -138,9 +151,19 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+#ifdef DEBUG
+	printNodeDB();
+#endif // DEBUG
+
+	/* Get lock for NodeDB */
+	pthread_mutex_lock(&mutex_nodeDB);
+
 	gethostname(nodeInformation[ownNodeId].hostName, MAX_CHARACTERS_IN_HOSTNAME);
 	strcpy(nodeInformation[ownNodeId].tcpPortNumber, argv[3]);
 	strcpy(nodeInformation[ownNodeId].udpPortNumber, argv[4]);
+
+	/* Release lock for NodeDB */
+	pthread_mutex_unlock(&mutex_nodeDB);
 
 	/* Fill your algorithm data structures */
 	if(fillAlgorithmDB(connectionInfoFile, ownNodeId) == -1)
@@ -148,6 +171,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+#if DEBUG
 	/* DEBUG */
 	printf("Adjacency List:\n");
 	for(ix=0 ; ix<AdjList.size() ; ix++)
@@ -158,6 +182,7 @@ int main(int argc, char **argv)
 		}
 		printf("\n");
 	}
+#endif
 
 #ifdef DEBUG
 	printf("INFO: Id:%d Own host information %s\n", ownNodeId, nodeInformation[ownNodeId].hostName);
@@ -194,6 +219,8 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	/* Register SIGPIPE signal handler */
+	signal(SIGPIPE, sigPipeHandler);
 
 	/* Establish connection with the prime nodes */
 	if(connectToPrimeNodes(ownNodeId) == -1)

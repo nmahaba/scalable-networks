@@ -14,6 +14,31 @@ extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
 extern int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
 /* EXTERN declarations - END 	*/
 
+static void printNodeDB()
+{
+	int index = 0;
+
+	/* Get lock for NodeDB */
+	//pthread_mutex_lock(&mutex_nodeDB);
+
+	printf("*****************************************\n");
+	printf("NodeId\tHostName\tTCPPort\tUDPPort\tTCPPort\n");
+	printf("*****************************************\n");
+
+	for(index=1 ; index<MAX_NUMBER_OF_NODES ; index++)
+	{
+		printf("%d %15s %10s %10s %d\n",
+				nodeInformation[index].nodeId,
+				nodeInformation[index].hostName,
+				nodeInformation[index].tcpPortNumber,
+				nodeInformation[index].udpPortNumber,
+				nodeInformation[index].tcpSocketFd);
+	}
+
+	/* Release lock for NodeDB */
+	//pthread_mutex_unlock(&mutex_nodeDB);
+}
+
 /* Debug */
 static void printDistanceVector()
 {
@@ -84,7 +109,7 @@ int sendDataOnTCP(int socketFd, char *sendBuffer, int *length)
 
 		if (n == -1)
 		{
-			printf("ERROR: sendAll, send failed, ECODE %s\n", strerror(errno));
+			printf("ERROR: sendAll, send failed, fd:%d ECODE %s\n", socketFd, strerror(errno));
 			break;
 		}
 
@@ -145,6 +170,9 @@ int connectToPrimeNodes(int ownNodeId)
 	int returngetaddrinfo;
 	struct addrinfo tempSocketInfo, *finalSocketInfo, *iSocketLoopIter;
 
+	/* Get lock for NodeDB */
+	pthread_mutex_lock(&mutex_nodeDB);
+
 	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
 		/* Check if connection has to be established with a particular node */
@@ -180,6 +208,9 @@ int connectToPrimeNodes(int ownNodeId)
 
 					close(nodeInformation[ix].tcpSocketFd);
 
+					/* Reset the value */
+					nodeInformation[ix].tcpSocketFd = -1;
+
 #ifdef DEBUG
 					printf("Node %s CANT connect to %s, ErrorCode %s\n", nodeInformation[ownNodeId].hostName, nodeInformation[ix].hostName, strerror(errno));
 #endif
@@ -197,6 +228,9 @@ int connectToPrimeNodes(int ownNodeId)
 			freeaddrinfo(finalSocketInfo);
 		}
 	}
+
+	/* Release lock for NodeDB */
+	pthread_mutex_unlock(&mutex_nodeDB);
 
 	return 0;
 }
@@ -249,8 +283,14 @@ int processTCPConnections(int ownNodeId)
 		return -1;
 	}
 
+	FD_ZERO(&master); // clear the master and temp sets
+	FD_ZERO(&read_fds);
+	printf("DEBUG: FD Sets cleared\n");
+
 	/* Add the listener to the master set */
 	FD_SET(listener, &master);
+
+	printf("DEBUG: fd:%d set\n", listener);
 
 	/* Keep track of the biggest file descriptor */
 	fdmax = listener;
@@ -265,11 +305,16 @@ int processTCPConnections(int ownNodeId)
 		}
 	}
 
+	/* Get lock for NodeDB */
+	pthread_mutex_lock(&mutex_nodeDB);
+
 	/* Add the file descriptors obtained during connect() to the master list so that nodes can also listen to data sent by other nodes */
 	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
 		if(nodeInformation[ix].tcpSocketFd != -1)
 		{
+			printf("DEBUG: fd:%d set Id:%d\n", nodeInformation[ix].tcpSocketFd, ix);
+
 			FD_SET(nodeInformation[ix].tcpSocketFd, &master);
 		}
 
@@ -282,6 +327,9 @@ int processTCPConnections(int ownNodeId)
 
 	/* Store current node's listening file descriptor in nodeInformation in own NodeId's location */
 	nodeInformation[ownNodeId].tcpSocketFd 	= listener;
+
+	/* Release lock for NodeDB */
+	pthread_mutex_unlock(&mutex_nodeDB);
 
 	/* Main loop */
 	while(true)
@@ -328,6 +376,8 @@ int processTCPConnections(int ownNodeId)
 						{
 							exit(1);
 						}
+
+						printf("DEBUG: fd:%d set\n", newfd);
 
 						FD_SET(newfd, &master); /* Add to master set */
 
@@ -439,10 +489,14 @@ int processTCPConnections(int ownNodeId)
 							printDegreeVector();
 #endif // DEBUG
 
+							/* Get lock for NodeDB */
+							pthread_mutex_lock(&mutex_nodeDB);
+
 							/* For the time being I am sending RouteInformation to all my neighbors always */
 							for(jx=1 ; jx<MAX_NUMBER_OF_NODES ; jx++)
 							{
-								if((nodeInformation[jx].nodeId != routeInformation.nodeId) && (nodeInformation[jx].tcpSocketFd != -1))
+								/* Don't send to yourself and the source of the message */
+								if((nodeInformation[jx].nodeId != ownNodeId) && (nodeInformation[jx].nodeId != routeInformation.nodeId) && (nodeInformation[jx].tcpSocketFd != -1))
 								{
 									if(sendRouteUpdate(nodeInformation[jx].nodeId, ownNodeId) == -1)
 									{
@@ -450,6 +504,9 @@ int processTCPConnections(int ownNodeId)
 									}
 								}
 							}
+
+							/* Release lock for NodeDB */
+							pthread_mutex_unlock(&mutex_nodeDB);
 						}
 					}
 					else if(messageId == ConnectionResponse)
@@ -481,7 +538,25 @@ int processTCPConnections(int ownNodeId)
 					}
 					else
 					{
-						printf("ERROR: processTCPConnections, Incorrect message id received, %d\n", messageId);
+						//mJoinRequest joinReq;
+
+						printf("ERROR: processTCPConnections, Incorrect mesgId:%d, fd:%d\n", messageId, ix);
+
+#if 0
+						messageSize = sizeof(joinReq) - sizeof(messageId);
+
+						if(receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize) == -1)
+						{
+							printf("ERROR: processTCPConnections, could receive only %d bytes\n", messageSize);
+							exit(1);
+						}
+
+						memcpy(&joinReq, buffer, messageSize);
+
+						printf("INFO: JoinReq received NodeId:%d Host:%s\n",
+
+						joinReq.nodeInformation.nodeId, joinReq.nodeInformation.hostName);
+#endif
 					}
 				}
 			} /* END got new incoming connection */
@@ -518,6 +593,9 @@ int updateScoketDescInNodeDB(struct sockaddr *pSockAddr, int fileDescriptor)
 		return -1;
 	}
 
+	/* Get lock for NodeDB */
+	pthread_mutex_lock(&mutex_nodeDB);
+
 	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
 		if((strcmp(nodeInformation[ix].hostName, newNodeHostName)) == 0)
@@ -530,6 +608,9 @@ int updateScoketDescInNodeDB(struct sockaddr *pSockAddr, int fileDescriptor)
 			break;
 		}
 	}
+
+	/* Release lock for NodeDB */
+	pthread_mutex_unlock(&mutex_nodeDB);
 
 	return 0;
 }
@@ -554,6 +635,21 @@ int createSocketAndBindAddress(int ownNodeId, int connectionType, int isServer, 
 	int reUsePort = 1;
 	struct addrinfo tempSocketInfo, *finalSocketInfo, *iSocketLoopIter;
 	int rv;
+	char ownTcpPortNumber[MAX_CHARACTERS_IN_PORTNUMBER];
+	char ownUdpPortNumber[MAX_CHARACTERS_IN_PORTNUMBER];
+	char toUdpPortNumber[MAX_CHARACTERS_IN_PORTNUMBER];
+	char toHostName[MAX_CHARACTERS_IN_HOSTNAME];
+
+	/* Get lock for NodeDB */
+	pthread_mutex_lock(&mutex_nodeDB);
+
+	strcpy(ownTcpPortNumber, nodeInformation[ownNodeId].tcpPortNumber);
+	strcpy(toUdpPortNumber, nodeInformation[toNodeId].udpPortNumber);
+	strcpy(toHostName, nodeInformation[toNodeId].hostName);
+	strcpy(ownUdpPortNumber, nodeInformation[ownNodeId].udpPortNumber);
+
+	/* Release lock for NodeDB */
+	pthread_mutex_unlock(&mutex_nodeDB);
 
 	(void) memset(&tempSocketInfo, 0, sizeof tempSocketInfo);
 
@@ -565,7 +661,7 @@ int createSocketAndBindAddress(int ownNodeId, int connectionType, int isServer, 
 		tempSocketInfo.ai_socktype 	= SOCK_STREAM;	 		/* TCP stream sockets */
 		tempSocketInfo.ai_flags 	= AI_PASSIVE;			/* Fill IP Address for you */
 
-		if((rv = getaddrinfo(NULL, nodeInformation[ownNodeId].tcpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
+		if((rv = getaddrinfo(NULL, ownTcpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
 		{
 			printf("ERROR: createSocketAndBindAddress, getaddrinfo failed, Error: %s, Connection:%d\n",
 					gai_strerror(rv),
@@ -581,7 +677,7 @@ int createSocketAndBindAddress(int ownNodeId, int connectionType, int isServer, 
 
 		if(isServer == CLIENT)
 		{
-			if((rv = getaddrinfo(nodeInformation[toNodeId].hostName, nodeInformation[toNodeId].udpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
+			if((rv = getaddrinfo( toHostName, toUdpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
 			{
 				printf("ERROR: createSocketAndBindAddress, getaddrinfo failed, Error: %s, Connection:%d\n",
 						gai_strerror(rv),
@@ -599,7 +695,7 @@ int createSocketAndBindAddress(int ownNodeId, int connectionType, int isServer, 
 			printf("DEBUG: Server listening on port:%s\n", nodeInformation[ownNodeId].udpPortNumber);
 #endif //DEBUG
 
-			if((rv = getaddrinfo(NULL, nodeInformation[ownNodeId].udpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
+			if((rv = getaddrinfo(NULL, ownUdpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
 			{
 				printf("ERROR: createSocketAndBindAddress, getaddrinfo failed, Error: %s, Connection:%d\n",
 						gai_strerror(rv),
@@ -663,8 +759,9 @@ int createSocketAndBindAddress(int ownNodeId, int connectionType, int isServer, 
  ****************************************************************************************/
 int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
 {
-	char 	hostName[MAX_CHARACTERS_IN_HOSTNAME]; 				/* Host name of the node */
-	char 	udpPortNumber[MAX_CHARACTERS_IN_PORTNUMBER];        /* Port number of the node */
+	char 	toHostName[MAX_CHARACTERS_IN_HOSTNAME]; 			/* Host name of the to node */
+	char	ownHostName[MAX_CHARACTERS_IN_HOSTNAME]; 			/* Host name of the own node */
+	char 	toUdpPortNumber[MAX_CHARACTERS_IN_PORTNUMBER];        /* Port number of the node */
 	int 	udpSockfd;
 	int 	tcpSocket;
 	struct 	addrinfo hints, *servinfo, *p;
@@ -676,12 +773,17 @@ int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
 
 	/* Get lock before accessing node database */
 	pthread_mutex_lock(&mutex_nodeDB);
-	strcpy(hostName, nodeInformation[toNodeId].hostName);
-	strcpy(udpPortNumber, nodeInformation[toNodeId].udpPortNumber);
+
+	strcpy(toHostName, nodeInformation[toNodeId].hostName);
+	strcpy(ownHostName, nodeInformation[ownNodeId].hostName);
+	strcpy(toUdpPortNumber, nodeInformation[toNodeId].udpPortNumber);
+
 	pthread_mutex_unlock(&mutex_nodeDB);
 
+//#ifdef DEBUG
+	printf("DEBUG: sendJoinReq, NodeId:%d host:%s, Port:%s\n", toNodeId, nodeInformation[toNodeId].hostName, nodeInformation[toNodeId].udpPortNumber);
 #ifdef DEBUG
-	printf("DEBUG: sendJoinReq, host:%s, Port:%s\n", hostName, udpPortNumber);
+	printf("DEBUG: sendJoinReq, NodeId:%d host:%s, Port:%s\n", toNodeId, toHostName, toUdpPortNumber);
 #endif // DEBUG
 
 	memset(&hints, 0, sizeof hints);
@@ -689,11 +791,11 @@ int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
 	hints.ai_socktype 	= SOCK_DGRAM;
 	hints.ai_flags		= AI_PASSIVE;				/* Use my IP */
 
-	if ((rv = getaddrinfo(hostName, udpPortNumber, &hints, &servinfo)) != 0)
+	if ((rv = getaddrinfo(toHostName, toUdpPortNumber, &hints, &servinfo)) != 0)
 	{
 		printf("ERROR: sendJoinReq, Host:%s UDPPort:%s getaddrinfo: ECODE: %s, Return Value:%d, ERROR:%s\n",
-				hostName,
-				udpPortNumber,
+				toHostName,
+				toUdpPortNumber,
 				strerror(errno),
 				rv,
 				gai_strerror(rv));
@@ -722,13 +824,13 @@ int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
 	/* Form the Join Message - Only the message and the node information is important */
 	joinRequest.messageId = JoinRequest;
 	joinRequest.nodeInformation.nodeId = ownNodeId;
-	strcpy(joinRequest.nodeInformation.hostName,nodeInformation[ownNodeId].hostName);
+	strcpy(joinRequest.nodeInformation.hostName,ownHostName);
 	strcpy(joinRequest.nodeInformation.tcpPortNumber,"");
 	strcpy(joinRequest.nodeInformation.udpPortNumber,"");
 	joinRequest.nodeInformation.tcpSocketFd = -1;
 
 #ifdef DEBUG
-	printf("DEBUG: ID:%d Sending JoinReq, contents Name:%s\n", ownNodeId, nodeInformation[ownNodeId].hostName);
+	printf("DEBUG: ID:%d Sending JoinReq, contents Name:%s\n", ownNodeId, ownHostName);
 #endif // DEBUG
 
 	/* Send the JoinReq message */
@@ -743,7 +845,7 @@ int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
 	}
 	else
 	{
-		printf("DEBUG: JoinReq sent to %s, sent (%d/%d) bytes\n", hostName, numbytes, sizeof(joinRequest));
+		printf("DEBUG: JoinReq sent to %s, sent (%d/%d) bytes\n", toHostName, numbytes, sizeof(joinRequest));
 	}
 
 	/* Now block on receive and return back to the sender */
@@ -775,6 +877,9 @@ int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
 			return -1;
 		}
 
+		/* Get lock before accessing node database */
+		pthread_mutex_lock(&mutex_nodeDB);
+
 		/* Store socket information in Node Database */
 		nodeInformation[nodeId].tcpSocketFd = tcpSocket;												/* NodeId */
 
@@ -783,6 +888,9 @@ int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
 		strcpy(nodeInformation[nodeId].hostName, joinResponse->nodeInformation[ix].hostName);			/* HostName */
 		strcpy(nodeInformation[nodeId].tcpPortNumber, joinResponse->nodeInformation[ix].tcpPortNumber);	/* TCP Port */
 		strcpy(nodeInformation[nodeId].udpPortNumber, joinResponse->nodeInformation[ix].udpPortNumber);	/* UDP Port */
+
+		/* Release lock after accessing node database */
+		pthread_mutex_unlock(&mutex_nodeDB);
 	}
 
 	/* Signal to TCP thread to start listening to incomming data on TCP connection */
@@ -795,7 +903,7 @@ int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
 
 	/* Clear the resources */
 	freeaddrinfo(servinfo);
-	close(udpSockfd);
+	//close(udpSockfd);
 
 	return 0;
 }
@@ -840,9 +948,6 @@ int connectToNewNode(char *hostName, char *TcpPortNumber)
 		{
 			close(socketfd);
 
-#ifdef DEBUG
-			printf("Node %s CANT connect to %s, ErrorCode %s\n", hostName, nodeInformation[ix].hostName, ga_strerror(rv));
-#endif
 			continue;
 		}
 		else
@@ -945,6 +1050,9 @@ int sendRouteUpdate(int toNodeId, int ownNodeId)
 	{
 		printf("ERROR: sendRouteUpdate, Failure in sending RouteInformaton, (%d/%d) bytes sent\n",
 				sendBytes, sizeof(routeInformation));
+
+		printNodeDB();
+
 		return -1;
 	}
 	else
