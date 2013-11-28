@@ -13,6 +13,7 @@
 #include <SBfsQNode.h>
 #include <vector>
 #include <algorithm>
+#include <stdio.h>
 
 /****************************************************************************************
   * updateDVM: Function to read the node configuration file and build node database

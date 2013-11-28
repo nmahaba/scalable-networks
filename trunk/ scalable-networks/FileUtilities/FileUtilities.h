@@ -20,6 +20,7 @@
 #include <fstream>
 #include <vector>
 #include <AlgorithmUtilities.h>
+#include <iostream>
 
 /****************************************************************************************
  /** initializeNodeDB: Function to read the node configuration file and build node database

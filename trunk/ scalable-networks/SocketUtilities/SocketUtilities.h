@@ -148,4 +148,13 @@ int sendConnectReq(int toNodeId, int ownNodeId);
  ****************************************************************************************/
 int sendRouteUpdate(int toNodeId, int ownNodeId);
 
+/* Debug */
+void printDistanceVector();
+
+/* Debug */
+void printDegreeVector();
+
+/* Debug */
+void printDVM();
+
 #endif //SOCKET_UTILITIES_H

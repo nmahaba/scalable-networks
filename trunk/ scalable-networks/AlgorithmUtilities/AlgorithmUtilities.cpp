@@ -41,19 +41,19 @@ int updateDVM(mRouteInformation routeInformation)
 		if(DegV[i] < routeInformation.newDegV[i])
 		{
 			degv_Val 	= 1 ;
-			DegV[i] 	= routeInformation.newDegV[i] ;
+			DegV[i] 	= routeInformation.newDegV[i];
 		}
 	}
 
 	/* Check for updates with the distance vectors */
 	for(int i = 0 ; i < MAX_NUMBER_OF_NODES ; i++)
 	{
-		DVM[routeInformation.nodeId][i] = routeInformation.newDegV[i] + 1 ;
+		DVM[routeInformation.nodeId][i] = routeInformation.newDistV[i] + 1;
 
-		if(DistV[i] > (routeInformation.newDegV[i] + 1))
+		if(DistV[i] > (routeInformation.newDistV[i] + 1))
 		{
-			dv_Val 		= 2 ;
-			DistV[i] 	= routeInformation.newDegV[i] + 1 ;
+			dv_Val 		= 2;
+			DistV[i] 	= routeInformation.newDistV[i] + 1;
 		}
 	}
 
@@ -76,62 +76,104 @@ void BFS(int startNode, int ownNodeId)
 	int visited[MAX_NUMBER_OF_NODES];					// All are initially set to zero
 	vector<BFSQNode> toVisit;							// A queue that lists out nodes to visit next
 
-	visited[ownNodeId] = 1 ;
-	visited[startNode] = 1 ;
-	DVM[startNode][startNode] = 1 ;
-	DVM[startNode][ownNodeId] = 1 ;
-	DistV[startNode] = 1 ;
+	/* Initialize visited to 0 */
+	std::fill_n(visited, MAX_NUMBER_OF_NODES, 0);
+
+	visited[startNode] 			= 1;
+	DVM[startNode][startNode] 	= 1;
+	DVM[startNode][ownNodeId] 	= 1;
+	DistV[startNode] 			= 1;
+
+	/* Debug */
+#if DEBUG
+	printf("BFS: OwnNodeId:%d StartNode:%d\n",ownNodeId, startNode);
+	printf("Adjacency List:\n");
+	for(int ix=0 ; ix<AdjList.size() ; ix++)
+	{
+		for(int jx=0 ; jx<AdjList.at(ix).size() ; jx++)
+		{
+			printf("%d ", AdjList.at(ix).at(jx));
+		}
+		printf("\n");
+	}
+#endif
 
 	/* Fill up the Queue with nodes that are next to visit */
 	for(int i = 0 ; i < AdjList.at(startNode).size() ; i++)
 	{
 		int nextNode = AdjList.at(startNode).at(i);
-		if(nextNode != ownNodeId)
-		{
-			/* Push the node as a to visit node to the queue*/
-			BFSQNode node ;
-			node.level = 2 ;
-			node.nodeId = nextNode ;
-			toVisit.push_back(node);
-		}
+
+		/* Push the node as a to visit node to the queue */
+		BFSQNode node ;
+		node.level 	= 2 ;
+		node.nodeId = nextNode ;
+		toVisit.push_back(node);
 	}
+
+#ifdef DEBUG
+	printf("DEBUG: To be visited:");
+	/* Debug */
+	for(int i = 0 ; i < toVisit.size() ; i++)
+	{
+		printf("%d ", toVisit.at(i).nodeId);
+	}
+	printf("\n");
+#endif // DEBUG
 
 	/* The BFS Algorithm */
 	while(toVisit.size() != 0)
 	{
 		/* Visit the node at the front of the queue */
 		BFSQNode curNode = toVisit.front();
-		/* see if already visited */
+
+		/* See if already visited */
 		if(visited[curNode.nodeId] == 1)
 		{
-
 			toVisit.erase(toVisit.begin());
-			continue;
 
+#ifdef DEBUG
+			printf("DEBUG: NodeId:%d already visited\n", curNode.nodeId);
+#endif // DEBUG
+
+			continue;
 		}
 
 		/* Visit this node */
-		visited[curNode.nodeId] = 1 ;
-		DVM[startNode][curNode.nodeId] = curNode.level ;
+		visited[curNode.nodeId] 		= 1;
+
+#ifdef DEBUG
+		printf("DEBUG: Visiting NodeId:%d\n", curNode.nodeId);
+#endif // DEBUG
+
+		DVM[startNode][curNode.nodeId] 	= curNode.level;
 
 		/* Do an update check on the DistV */
 		if(DistV[curNode.nodeId] > curNode.level)
 		{
-			DistV[curNode.nodeId] = curNode.level ;
+			DistV[curNode.nodeId] 		= curNode.level;
+
+#ifdef DEBUG
+			printf("Changing route, NodeId:%d Level:%d\n", curNode.nodeId, curNode.level);
+#endif // DEBUG
+
 		}
+
 		/* Add all of it's unvisited neighbors to the queue */
-		for(int i = 0 ; i < AdjList.at(curNode.nodeId).size() ; i++)
+		for(int i=0 ; i<AdjList.at(curNode.nodeId).size() ; i++)
 		{
 			int nextNode = AdjList.at(curNode.nodeId).at(i);
+
 			if(visited[nextNode] != 1)
 			{
 				BFSQNode next;
-				next.level = curNode.level + 1 ;
-				next.nodeId = nextNode ;
+
+				next.level 	= curNode.level + 1;
+				next.nodeId = nextNode;
+
 				toVisit.push_back(next);
 			}
-
 		}
+
 		/* Remove the node itself */
 		toVisit.erase(toVisit.begin());
 	}

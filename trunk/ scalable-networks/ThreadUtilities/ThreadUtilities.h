@@ -30,6 +30,18 @@ int spawnUdpThreadForQueries(int *ownNodeId);
  */
 void *handleNodeQueries(void *data);
 
+/*************************************************************************
+ /** getRandomNumber : Function to return a random number in a given range
+  *
+  * param[in]	min Minimum bound
+  *
+  * param[in]	max Maximum bound
+ *
+ *  @return Random number within a range
+ *
+ ************************************************************************/
+int getRandomNumber(int min, int max);
+
 
 /*********************************************************************************************************
  /** spawnUdpThreadForJoinReqResp: Function to spawn a thread to handle UDP messages for JoinReq, JoinResp

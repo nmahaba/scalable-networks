@@ -17,6 +17,7 @@ extern SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 extern int primeNode;
 extern sem_t sem_connectRespWait;
 extern sem_t sem_startTcpConListen;
+extern int numOfPrimeNodes;
 
 /*********************************************************************************************************
  /** spawnUdpThreadForQueries: Function to spawn a thread to handle UDP messages for node queries
@@ -159,6 +160,7 @@ void *handleNodeEntry(void *data)
 	int nodeId;
 	int numOfConnectionRespReceived = 0;
 	int rv;
+	int node1, node2;
 
 	printf("INFO: UDP Thread for handling Node Entry\n");
 
@@ -264,17 +266,21 @@ void *handleNodeEntry(void *data)
 			joinResponse.messageId = JoinResponse;
 			joinResponse.nodeCount = NODES_TO_JOIN;				/* M is 2, check Constants.h file */
 
+			node1 = getRandomNumber(1, numOfPrimeNodes+1);
+
 			/* Node 4 */
-			joinResponse.nodeInformation[0].nodeId = nodeInformation[4].nodeId;
-			strcpy(joinResponse.nodeInformation[0].hostName,nodeInformation[4].hostName);
-			strcpy(joinResponse.nodeInformation[0].tcpPortNumber, nodeInformation[4].tcpPortNumber);
-			strcpy(joinResponse.nodeInformation[0].udpPortNumber, nodeInformation[4].udpPortNumber);
+			joinResponse.nodeInformation[0].nodeId = nodeInformation[node1].nodeId;
+			strcpy(joinResponse.nodeInformation[0].hostName,nodeInformation[node1].hostName);
+			strcpy(joinResponse.nodeInformation[0].tcpPortNumber, nodeInformation[node1].tcpPortNumber);
+			strcpy(joinResponse.nodeInformation[0].udpPortNumber, nodeInformation[node1].udpPortNumber);
+
+			while((node2 = getRandomNumber(1, numOfPrimeNodes)) == node1);
 
 			/* Node 5 */
-			joinResponse.nodeInformation[1].nodeId = nodeInformation[5].nodeId;
-			strcpy(joinResponse.nodeInformation[1].hostName,nodeInformation[5].hostName);
-			strcpy(joinResponse.nodeInformation[1].tcpPortNumber, nodeInformation[5].tcpPortNumber);
-			strcpy(joinResponse.nodeInformation[1].udpPortNumber, nodeInformation[5].udpPortNumber);
+			joinResponse.nodeInformation[1].nodeId = nodeInformation[node2].nodeId;
+			strcpy(joinResponse.nodeInformation[1].hostName,nodeInformation[node2].hostName);
+			strcpy(joinResponse.nodeInformation[1].tcpPortNumber, nodeInformation[node2].tcpPortNumber);
+			strcpy(joinResponse.nodeInformation[1].udpPortNumber, nodeInformation[node2].udpPortNumber);
 
 			/* Send the message */
 			if((sentBytes = sendto(socketfd, &joinResponse, sizeof(joinResponse), 0, &senderAddress, addr_len)) == -1)
@@ -294,3 +300,17 @@ void *handleNodeEntry(void *data)
 	printf("INFO: UDP Thread exiting\n");
 }
 
+/*************************************************************************
+ /** getRandomNumber : Function to return a random number in a given range
+  *
+  * param[in]	min Minimum bound
+  *
+  * param[in]	max Maximum bound
+ *
+ *  @return Random number within a range
+ *
+ ************************************************************************/
+int getRandomNumber(int min, int max)
+{
+	return((rand() % (max+1-min))+ min);
+}
