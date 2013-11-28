@@ -40,13 +40,13 @@ static void printNodeDB()
 }
 
 /* Debug */
-static void printDistanceVector()
+void printDistanceVector()
 {
 	int ix;
 
 	printf("Updated Distance Vector\n");
 
-	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	for(ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
 		printf("%d ", DistV[ix]);
 	}
@@ -54,13 +54,13 @@ static void printDistanceVector()
 }
 
 /* Debug */
-static void printDegreeVector()
+void printDegreeVector()
 {
 	int ix;
 
 	printf("Updated Degree Vector\n");
 
-	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	for(ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
 		printf("%d ", DegV[ix]);
 	}
@@ -68,17 +68,17 @@ static void printDegreeVector()
 }
 
 /* Debug */
-static void printDVM()
+void printDVM()
 {
 	int ix,jx;
 
 	printf("Updated DVM\n");
 
-	for(ix=1 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	for(ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
-		for(jx=1 ; jx<MAX_NUMBER_OF_NODES ; jx++)
+		for(jx=0 ; jx<MAX_NUMBER_OF_NODES ; jx++)
 		{
-			printf("%d ", DVM[ix][jx]);
+			printf("%d\t", DVM[ix][jx]);
 		}
 		printf("\n");
 	}
@@ -325,8 +325,11 @@ int processTCPConnections(int ownNodeId)
 		}
 	}
 
+#ifdef DEBUG
+	/* Check this ------- BUG */
 	/* Store current node's listening file descriptor in nodeInformation in own NodeId's location */
 	nodeInformation[ownNodeId].tcpSocketFd 	= listener;
+#endif // DEBUG
 
 	/* Release lock for NodeDB */
 	pthread_mutex_unlock(&mutex_nodeDB);
@@ -424,15 +427,35 @@ int processTCPConnections(int ownNodeId)
 								nodeId,
 								connectRequest.nodeInformation.hostName);
 
+						/* Update your database */
+						/* Get lock before accessing node database */
+						pthread_mutex_lock(&mutex_nodeDB);
+
+						printf("DEBUG: UpdateNodeDb, NodeId:%d Socket:%d\n", nodeId, nodeInformation[nodeId].tcpSocketFd);
+
+						/* Store socket information in Node Database */
+						nodeInformation[nodeId].nodeId 		= nodeId;													/* NodeId */
+						nodeInformation[nodeId].tcpSocketFd = ix;														/* SocketFd */
+						strcpy(nodeInformation[nodeId].hostName, connectRequest.nodeInformation.hostName);				/* HostName */
+						strcpy(nodeInformation[nodeId].tcpPortNumber, connectRequest.nodeInformation.tcpPortNumber);	/* TCP Port */
+						strcpy(nodeInformation[nodeId].udpPortNumber, connectRequest.nodeInformation.udpPortNumber);	/* UDP Port */
+
+						/* Release lock after accessing node database */
+						pthread_mutex_unlock(&mutex_nodeDB);
+
 						/* Send connection response */
 						/* Clear buffer */
 						memset(buffer,0,sizeof(buffer));
 
 						/* Form the message */
-						connectResponse.messageId = ConnectionResponse;
-						connectResponse.nodeId	=	ownNodeId;
-						connectResponse.routeInformation.nodeId = ownNodeId;
-						connectResponse.routeInformation.messageId = RouteInformation;
+						connectResponse.messageId 					= ConnectionResponse;
+						connectResponse.nodeId						= ownNodeId;
+						connectResponse.routeInformation.nodeId 	= ownNodeId;
+						connectResponse.routeInformation.messageId 	= RouteInformation;
+
+						/* Fill RouteInformation */
+						memcpy(connectResponse.routeInformation.newDegV, DegV, sizeof(DegV));
+						memcpy(connectResponse.routeInformation.newDistV, DistV, sizeof(DistV));
 
 						/* Get the size */
 						messageSize = sizeof(connectResponse);
@@ -467,7 +490,7 @@ int processTCPConnections(int ownNodeId)
 
 						memcpy(&routeInformation, buffer, messageSize);
 
-						printf("INFO: RouteInformation received NodeId:%d\n",
+						printf("INFO: RouteInformation received NodeId:%d, contents are below\n",
 								routeInformation.nodeId);
 
 						/*
@@ -476,6 +499,21 @@ int processTCPConnections(int ownNodeId)
 						 *		Send RouteInformation to neighbors
 						 *	If not, ignore
 						 */
+
+						/* DEBUG */
+						printf("DEBUG: Distance Vector: ");
+						for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+						{
+							printf("%d ", routeInformation.newDistV[ix]);
+						}
+						printf("\n");
+
+						printf("DEBUG: Degree Vector: ");
+						for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+						{
+							printf("%d ", routeInformation.newDegV[ix]);
+						}
+						printf("\n");
 
 						routeUpdateResult = updateDVM(routeInformation);
 
@@ -523,10 +561,39 @@ int processTCPConnections(int ownNodeId)
 
 						printf("DEBUG: Received connection response from NodeId:%d\n",connectResponse.nodeId);
 
-						/* Update your database here.....
+						/* DEBUG */
+						printf("DEBUG: Distance Vector: ");
+						for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+						{
+							printf("%d ", connectResponse.routeInformation.newDistV[ix]);
+						}
+						printf("\n");
+
+						printf("DEBUG: Degree Vector: ");
+						for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+						{
+							printf("%d ", connectResponse.routeInformation.newDegV[ix]);
+						}
+						printf("\n");
+
+						/*
+						 * Update your database here.....
 						 * 1. Distance Vector.
 						 * 2. Degree Vector
 						 */
+						routeUpdateResult = updateDVM(connectResponse.routeInformation);
+
+						switch(routeUpdateResult)
+						{
+							case 0:	printf("DEBUG: No network change\n");
+									break;
+							case 1: printf("DEBUG: Degree vector changed\n");
+									break;
+							case 2: printf("DEBUG: Distance vector changed\n");
+									break;
+							case 3: printf("DEBUG: Degree and Distance vector changed\n");
+									break;
+						}
 
 						/* Signal the UDP thread */
 						if((rv = sem_post(&sem_connectRespWait)) == -1)
@@ -1030,11 +1097,50 @@ int sendRouteUpdate(int toNodeId, int ownNodeId)
 	int sendBytes;
 	char sendBuffer[200];
 
+#ifdef DEBUG
+	/* DEBUG */
+	printf("Before memcpy\n");
+	printf("DEBUG: Distance Vector: ");
+	for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	{
+		printf("%d ",DistV[ix]);
+	}
+	printf("\n");
+
+	printf("DEBUG: Degree Vector: ");
+	for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	{
+		printf("%d ",DegV[ix]);
+	}
+	printf("\n");
+#endif // DEBUG
+
 	/* Prepare the message */
 	routeInformation.messageId 	= RouteInformation;
 	routeInformation.nodeId 	= ownNodeId;
 	memcpy(routeInformation.newDegV, DegV, sizeof(DegV));
 	memcpy(routeInformation.newDistV, DistV, sizeof(DistV));
+
+#ifdef DEBUG
+	/* DEBUG */
+	printf("DEBUG: Distance Vector: ");
+	for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	{
+		printf("Orig:%d Copy:%d\n",
+				DistV[ix],
+				routeInformation.newDistV[ix]);
+	}
+	printf("\n");
+
+	printf("DEBUG: Degree Vector: ");
+	for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	{
+		printf("Orig:%d Copy:%d\n",
+				DegV[ix],
+				routeInformation.newDegV[ix]);
+	}
+	printf("\n");
+#endif // DEBUG
 
 	/* Get the socket fd from database */
 	tcpSocketFd = nodeInformation[toNodeId].tcpSocketFd;
@@ -1048,8 +1154,8 @@ int sendRouteUpdate(int toNodeId, int ownNodeId)
 
 	if(sendDataOnTCP(tcpSocketFd, sendBuffer, &sendBytes) == -1)
 	{
-		printf("ERROR: sendRouteUpdate, Failure in sending RouteInformaton, (%d/%d) bytes sent\n",
-				sendBytes, sizeof(routeInformation));
+		printf("ERROR: sendRouteUpdate, Failure in sending RouteInformaton, nodeId:%d (%d/%d) bytes sent\n",
+				toNodeId, sendBytes, sizeof(routeInformation));
 
 		printNodeDB();
 

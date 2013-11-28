@@ -18,6 +18,7 @@ extern int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
 extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
 extern vector< vector<int> > AdjList;  						/* Used initially for calculating the DegV */
 extern pthread_mutex_t mutex_nodeDB;
+extern int numOfPrimeNodes;
 /* EXTERN declarations - END 	*/
 
 /****************************************************************************************
@@ -83,6 +84,9 @@ int initializeNodeDB(char *nodeInfoFile)
 
 	while(fgets(line, 100, fd_nodeInfoFile) != NULL)
 	{
+		/* Count number of prime nodes */
+		numOfPrimeNodes++;
+
 		//printf("%s", line);
 
 		token = strtok(line," ");
@@ -234,6 +238,9 @@ int fillAlgorithmDB(char *connectionsInfoFile, int ownNodeId)
 	/* Fill up the DistV with all infinity */
 	std::fill_n(DistV, MAX_NUMBER_OF_NODES, INFINITY);
 
+	/* Initialize DegV to 0 */
+	std::fill_n(DegV, MAX_NUMBER_OF_NODES, 0);
+
 	DistV[ownNodeId] = 0 ;
 
 	/* Fill up the DVM with all infinity */
@@ -241,10 +248,25 @@ int fillAlgorithmDB(char *connectionsInfoFile, int ownNodeId)
 	{
 		for(int j = 0 ; j < MAX_NUMBER_OF_NODES ; j++)
 		{
-			DVM[i][j] = INFINITY ;
+			DVM[i][j] = INFINITY;
 		}
-
 	}
+
+	/* DEBUG */
+	printf("fillAlgorithmDBy\n");
+	printf("DEBUG: Distance Vector: ");
+	for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	{
+		printf("%d ",DistV[ix]);
+	}
+	printf("\n");
+
+	printf("DEBUG: Degree Vector: ");
+	for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
+	{
+		printf("%d ",DegV[ix]);
+	}
+	printf("\n");
 
 	DVM[ownNodeId][ownNodeId] = 0 ;
 
@@ -272,8 +294,8 @@ int fillAlgorithmDB(char *connectionsInfoFile, int ownNodeId)
 			break;
 		}
 
-		char* inputs=strtok((char*)line.c_str(),",");
-		int left = atoi(inputs);
+		char* inputs 	= strtok((char*)line.c_str(),",");
+		int left   		= atoi(inputs);
 
 		inputs = strtok(NULL,",");
 		int right = atoi(inputs);
@@ -317,22 +339,19 @@ int fillAlgorithmDB(char *connectionsInfoFile, int ownNodeId)
 	 * Presumably the members of myNeigh are at level 1
 	 * Everyone after that is at level i + 1
 	 */
-	for(int i = 0 ; i < myNbor.size() ; i++)
+	for(int i=0 ; i<myNbor.size() ; i++)
 	{
 		/* Call BFS on the specific Neighbor */
 		BFS(myNbor.at(i), ownNodeId);
 	}
 
 #ifdef DEBUG
-
 	cout << "Final DVM:" << endl ;
 	for(int i = 0 ; i < MAX_NUMBER_OF_NODES ; i++)
 	{
 		for(int j = 0 ; j < MAX_NUMBER_OF_NODES ; j++)
 		{
-
 			cout<<DVM[i][j]<<"\t" ;
-
 		}
 		cout<<endl;
 	}

@@ -23,6 +23,7 @@ using namespace std;
 SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 int connectionInfo[MAX_NUMBER_OF_NODES] =	{0};
 int primeNode 							= 	0;
+int	numOfPrimeNodes						=	0;
 
 /* Data structures required for the algorithm */
 int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
@@ -218,6 +219,13 @@ int main(int argc, char **argv)
 		printf("ERROR: Main, semaphore creation failed for Semaphore - TCP Connection, Error:%s\n", gai_strerror(rv));
 		exit(1);
 	}
+
+#ifdef DEBUG
+	/* Debug */
+	printDistanceVector();
+	printDegreeVector();
+	printDVM();
+#endif // DEBUG
 
 	/* Register SIGPIPE signal handler */
 	signal(SIGPIPE, sigPipeHandler);
