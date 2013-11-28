@@ -8,9 +8,15 @@
 
 #include<FileUtilities.h>
 
+using namespace std;
+
 /* EXTERN declarations - START 	*/
 extern SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 extern int connectionInfo[MAX_NUMBER_OF_NODES];
+extern int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
+extern int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
+extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
+extern vector< vector<int> > AdjList;  						/* Used initially for calculating the DegV */
 /* EXTERN declarations - END 	*/
 
 /****************************************************************************************
@@ -202,3 +208,142 @@ int readConnectionsFile(char *connectionsInfoFile, int ownNodeId)
 	return 0;
 }
 
+/****************************************************************************************
+  * fillAlgorithmDB: Function to read the connectionFile and fill DVM, DisV and DegV
+  *
+  * @param[in]: connectionInfoFile: File name of connection Info file
+  *
+  * @param[in]: ownNodeId: Own node Id
+  *
+  * @return 0 if success or -1 if failure
+  *
+ ****************************************************************************************/
+int fillAlgorithmDB(char *connectionsInfoFile, int ownNodeId)
+{
+	/* Should perform BFS one each of the neighbors, keep a list of your neighbors */
+	vector<int>myNbor;	//Should perform BFS on each node
+
+	/* Fill up the DistV with all infinity */
+	std::fill_n(DistV, MAX_NUMBER_OF_NODES, INFINITY);
+
+	DistV[ownNodeId] = 0 ;
+
+	/* Fill up the DVM with all infinity */
+	for(int i = 0 ; i < MAX_NUMBER_OF_NODES ; i++)
+	{
+		for(int j = 0 ; j < MAX_NUMBER_OF_NODES ; j++)
+		{
+			DVM[i][j] = INFINITY ;
+		}
+
+	}
+
+	DVM[ownNodeId][ownNodeId] = 0 ;
+
+#ifdef DEBUG
+	cout<<AdjList.size()<<endl;
+#endif // DEBUG
+
+	/* Read Contents of the Connection Info File into the Adjacency List */
+	ifstream conFile(connectionsInfoFile);
+
+	/* Error checking */
+	if(conFile.is_open() == -1)
+	{
+		printf("ERROR: fillAlgorithmDB, ConnectionFile open failed, ECODE:%s\n", strerror(errno));
+		return -1;
+	}
+
+	while(!conFile.eof())
+	{
+		/* Read and parse the connectionInfoFile Line */
+		string line;
+
+		if(!(conFile>>line))
+		{
+			break;
+		}
+
+		char* inputs=strtok((char*)line.c_str(),",");
+		int left = atoi(inputs);
+
+		inputs = strtok(NULL,",");
+		int right = atoi(inputs);
+
+		/*Fill up the adjacency list with left neighbor as right and vice versa*/
+		AdjList.at(left).push_back(right);
+		AdjList.at(right).push_back(left);
+
+		/* Check if my neighbor and add to the myNbor */
+		if(left == ownNodeId)
+		{
+			myNbor.push_back(right);
+		}
+		else if(right == ownNodeId)
+		{
+			myNbor.push_back(left);
+		}
+	}
+
+#ifdef DEBUG
+	/* Print out adjacency list */
+	for(int i = 0 ; i < AdjList.size() ; i++)
+	{
+		cout<<" Neighbors of  "<<i<<" : "<<endl;
+
+		for(int j = 0 ; j < AdjList.at(i).size() ; j++)
+			cout<<AdjList.at(i).at(j)<<" ";
+
+		cout<<endl;
+
+	}
+#endif
+
+	/* Since we now have the adjacency list filled up we can initialize the degree vector */
+	for(int i = 0 ; i < AdjList.size() ; i++)
+	{
+		DegV[i] = AdjList.at(i).size() ;
+	}
+
+	/* Now perform BFS on each element of myNeigh
+	 * Presumably the members of myNeigh are at level 1
+	 * Everyone after that is at level i + 1
+	 */
+	for(int i = 0 ; i < myNbor.size() ; i++)
+	{
+		/* Call BFS on the specific Neighbor */
+		BFS(myNbor.at(i), ownNodeId);
+	}
+
+#ifdef DEBUG
+
+	cout << "Final DVM:" << endl ;
+	for(int i = 0 ; i < MAX_NUMBER_OF_NODES ; i++)
+	{
+		for(int j = 0 ; j < MAX_NUMBER_OF_NODES ; j++)
+		{
+
+			cout<<DVM[i][j]<<"\t" ;
+
+		}
+		cout<<endl;
+	}
+
+	cout << "Final Degree Vector: " << endl ;
+	for(int i = 0 ; i < MAX_NUMBER_OF_NODES ; i++)
+	{
+		cout<<DegV[i]<<"\t";
+	}
+	cout<<endl;
+
+	cout << "Final Distance Vector: " << endl ;
+	for(int i = 0 ; i < MAX_NUMBER_OF_NODES ; i++)
+	{
+		cout<<DistV[i]<<"\t";
+	}
+	cout<<endl;
+
+#endif
+
+	return 0;
+}

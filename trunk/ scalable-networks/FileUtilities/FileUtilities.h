@@ -8,15 +8,18 @@
 #ifndef FILE_UTILITIES_H_
 #define FILE_UTILITIES_H_
 
-#include<stdio.h>
-#include<string.h>
-#include<dirent.h>
-#include<sys/stat.h>
-#include<unistd.h>
-#include<errno.h>
-#include<Constants.h>
-#include<SNodeInformation.h>
-#include<stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
+#include <Constants.h>
+#include <SNodeInformation.h>
+#include <stdlib.h>
+#include <fstream>
+#include <vector>
+#include <AlgorithmUtilities.h>
 
 /****************************************************************************************
  /** initializeNodeDB: Function to read the node configuration file and build node database
@@ -40,6 +43,18 @@ int initializeNodeDB(char *nodeInfoFile);
  *
  ****************************************************************************************/
 int readConnectionsFile(char *connectionsInfoFile, int ownNodeId);
+
+/****************************************************************************************
+  * fillAlgorithmDB: Function to read the connectionFile and fill DVM, DisV and DegV
+  *
+  * @param[in]: connectionInfoFile: File name of connection Info file
+  *
+  * @param[in]: ownNodeId: Own node Id
+  *
+  * @return 0 if success or -1 if failure
+  *
+ ****************************************************************************************/
+int fillAlgorithmDB(char *connectionsInfoFile, int ownNodeId);
 
 #endif /* FILE_UTILITIES_H_ */
 

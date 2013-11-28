@@ -15,6 +15,7 @@
 #define SERVER									1
 #define CLIENT									0
 #define NODES_TO_JOIN							2
+#define INFINITY 								NO_VALUE
 
 #endif // CONSTANTS_H
 

@@ -20,6 +20,7 @@
 #include <SJoinResponse.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <AlgorithmUtilities.h>
 
 /****************************************************************************************
  /** sendDataOnTCP: Function to send data completely

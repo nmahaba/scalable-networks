@@ -23,6 +23,12 @@ SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 int connectionInfo[MAX_NUMBER_OF_NODES] =	{0};
 int primeNode 							= 	0;
 
+/* Data structures required for the algorithm */
+int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
+int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
+int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
+vector< vector<int> > AdjList(MAX_NUMBER_OF_NODES); /* Used initially for calculating the DegV */
+
 /* Mutex */
 pthread_mutex_t mutex_nodeDB;
 
@@ -110,6 +116,7 @@ int main(int argc, char **argv)
 	char connectionInfoFile[MAX_CHARACTERS_IN_FILENAME];
 	int ownNodeId = -1;
 	int rv;
+	int ix,jx;
 
 	/* Check command line arguments */
 	if(argc != 7)
@@ -134,6 +141,23 @@ int main(int argc, char **argv)
 	gethostname(nodeInformation[ownNodeId].hostName, MAX_CHARACTERS_IN_HOSTNAME);
 	strcpy(nodeInformation[ownNodeId].tcpPortNumber, argv[3]);
 	strcpy(nodeInformation[ownNodeId].udpPortNumber, argv[4]);
+
+	/* Fill your algorithm data structures */
+	if(fillAlgorithmDB(connectionInfoFile, ownNodeId) == -1)
+	{
+		exit(1);
+	}
+
+	/* DEBUG */
+	printf("Adjacency List:\n");
+	for(ix=0 ; ix<AdjList.size() ; ix++)
+	{
+		for(jx=0 ; jx<AdjList.at(ix).size() ; jx++)
+		{
+			printf("%d ", AdjList.at(ix).at(jx));
+		}
+		printf("\n");
+	}
 
 #ifdef DEBUG
 	printf("INFO: Id:%d Own host information %s\n", ownNodeId, nodeInformation[ownNodeId].hostName);
