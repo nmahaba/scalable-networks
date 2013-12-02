@@ -217,7 +217,7 @@ void *handleNodeEntry(void *data)
 		printf("DEBUG: Received all %d ConnectResponse\n", joinResponse.nodeCount);
 
 		/* Send the first RouteInformation message to neighbor nodes */
-		/* For loop for sending RouteInformation for m neighbors */
+		/* For loop for sending RouteInformation for M neighbors */
 		for(ix=0 ; ix<joinResponse.nodeCount ; ix++)
 		{
 			if(sendRouteUpdate(joinResponse.nodeInformation[ix].nodeId, ownNodeId) == -1)
@@ -258,8 +258,17 @@ void *handleNodeEntry(void *data)
 					joinRequest.nodeInformation.hostName,
 					joinRequest.nodeInformation.nodeId);
 
-			/* Barbasi Model Intelligence should be added here */
+			/********************************************************************************************************
+			 ********************************************************************************************************
+							Barbasi Model Intelligence should be added here - START
+			 ********************************************************************************************************
+			 ********************************************************************************************************/
 
+			/* ToDo List
+			 * 1. Implement Barbasi model
+			 * 2. Make M as a configurable parameter, the user should be able to specify this in runtime
+			 *    Create a global variable, read it during startup and use it in the place of the MACRO NODES_TO_JOIN
+			 * */
 
 			/* For the time being select 2 nodes, node 4 and node 5 for new connection */
 			/* Prepare the message to be sent */
@@ -282,6 +291,12 @@ void *handleNodeEntry(void *data)
 			strcpy(joinResponse.nodeInformation[1].tcpPortNumber, nodeInformation[node2].tcpPortNumber);
 			strcpy(joinResponse.nodeInformation[1].udpPortNumber, nodeInformation[node2].udpPortNumber);
 
+			/********************************************************************************************************
+			 ********************************************************************************************************
+							Barbasi Model Intelligence should be added here - END
+			 ********************************************************************************************************
+			 ********************************************************************************************************/
+
 			/* Send the message */
 			if((sentBytes = sendto(socketfd, &joinResponse, sizeof(joinResponse), 0, &senderAddress, addr_len)) == -1)
 			{
@@ -290,9 +305,9 @@ void *handleNodeEntry(void *data)
 			}
 			else
 			{
-				printf("DEBUG: JoinResponse sent to Host:%s NodeId:%d\n",
-						joinRequest.nodeInformation.hostName,
-						joinRequest.nodeInformation.nodeId);
+				printf("INFO: JoinResponse sent to NodeId:%d Host:%s\n",
+						joinRequest.nodeInformation.nodeId,
+						joinRequest.nodeInformation.hostName);
 			}
 		}
 	}

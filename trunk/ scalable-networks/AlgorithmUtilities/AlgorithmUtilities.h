@@ -15,10 +15,22 @@
 #include <algorithm>
 #include <stdio.h>
 
+/* Enum definition - Bad practice */
+typedef enum
+{
+	newNodeJoinUpdate=1,
+	routineUpdate
+}eRouteType;
+
 /****************************************************************************************
   * updateDVM: Function to read the node configuration file and build node database
   *
   * @param[in] routeInformation: The route information which has the updates.
+  *
+  * @param[in] eRouteType: This specifies what kind of update is this, a routine or
+  *                        a new node update
+  *
+  * @param[in] ownNodeId: Id of own node
   *
   * @return
   * Return the type of outcome
@@ -29,7 +41,7 @@
   * 1        1        3 - Change in both DegV and DV
   *
  ****************************************************************************************/
-int updateDVM(mRouteInformation routeInformation);
+int updateDVM(mRouteInformation routeInformation, eRouteType updateType, int ownNodeId);
 
 /****************************************************************************************
   * updateDVM: Function to read the node configuration file and build node database
