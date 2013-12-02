@@ -283,14 +283,18 @@ int processTCPConnections(int ownNodeId)
 		return -1;
 	}
 
-	FD_ZERO(&master); // clear the master and temp sets
+	FD_ZERO(&master); 	/* Clear the master and temp sets */
 	FD_ZERO(&read_fds);
+#ifdef DEBUG
 	printf("DEBUG: FD Sets cleared\n");
+#endif // DEBUG
 
 	/* Add the listener to the master set */
 	FD_SET(listener, &master);
 
+#ifdef DEBUG
 	printf("DEBUG: fd:%d set\n", listener);
+#endif // DEBUG
 
 	/* Keep track of the biggest file descriptor */
 	fdmax = listener;
@@ -313,7 +317,9 @@ int processTCPConnections(int ownNodeId)
 	{
 		if(nodeInformation[ix].tcpSocketFd != -1)
 		{
+#ifdef DEBUG
 			printf("DEBUG: fd:%d set Id:%d\n", nodeInformation[ix].tcpSocketFd, ix);
+#endif // DEBUG
 
 			FD_SET(nodeInformation[ix].tcpSocketFd, &master);
 		}
@@ -373,14 +379,18 @@ int processTCPConnections(int ownNodeId)
 						 * Update the new file descriptor in node's database which will used for future communication
 						 */
 
-						printf("DEBUG: New connection estabished, fd:%d\n", newfd);
+#ifdef DEBUG
+						printf("DEBUG: New connection established, fd:%d\n", newfd);
+#endif // DEBUG
 
 						if(updateScoketDescInNodeDB((struct sockaddr *)&remoteaddr, newfd) == -1)
 						{
 							exit(1);
 						}
 
+#ifdef DEBUG
 						printf("DEBUG: fd:%d set\n", newfd);
+#endif // DEBUG
 
 						FD_SET(newfd, &master); /* Add to master set */
 
@@ -431,7 +441,9 @@ int processTCPConnections(int ownNodeId)
 						/* Get lock before accessing node database */
 						pthread_mutex_lock(&mutex_nodeDB);
 
+#ifdef DEBUG
 						printf("DEBUG: UpdateNodeDb, NodeId:%d Socket:%d\n", nodeId, nodeInformation[nodeId].tcpSocketFd);
+#endif // DEBUG
 
 						/* Store socket information in Node Database */
 						nodeInformation[nodeId].nodeId 		= nodeId;													/* NodeId */
@@ -490,15 +502,12 @@ int processTCPConnections(int ownNodeId)
 
 						memcpy(&routeInformation, buffer, messageSize);
 
+						printf("INFO: RouteInformation received NodeId:%d\n", routeInformation.nodeId);
+
+//#ifdef DEBUG
+#if 1
 						printf("INFO: RouteInformation received NodeId:%d, contents are below\n",
 								routeInformation.nodeId);
-
-						/*
-						 *	Update your routing table with information from neighbor nodes
-						 *	If any route has changed OR degree of any node has changed
-						 *		Send RouteInformation to neighbors
-						 *	If not, ignore
-						 */
 
 						/* DEBUG */
 						printf("DEBUG: Distance Vector: ");
@@ -514,8 +523,29 @@ int processTCPConnections(int ownNodeId)
 							printf("%d ", routeInformation.newDegV[ix]);
 						}
 						printf("\n");
+#endif // DEBUG
 
-						routeUpdateResult = updateDVM(routeInformation);
+						/*
+						 *	Update your routing table with information from neighbor nodes
+						 *	If any route has changed OR degree of any node has changed
+						 *		Send RouteInformation to neighbors
+						 *	If not, ignore
+						 */
+
+						routeUpdateResult = updateDVM(routeInformation, routineUpdate, ownNodeId);
+
+						/* Display the result of the routing update */
+						switch(routeUpdateResult)
+						{
+							case 0:	printf("INFO: No network change\n");
+									break;
+							case 1: printf("INFO: Degree vector changed\n");
+									break;
+							case 2: printf("INFO: Distance vector changed\n");
+									break;
+							case 3: printf("INFO: Degree and Distance vector changed\n");
+									break;
+						}
 
 						if(routeUpdateResult > 0)
 						{
@@ -561,6 +591,8 @@ int processTCPConnections(int ownNodeId)
 
 						printf("DEBUG: Received connection response from NodeId:%d\n",connectResponse.nodeId);
 
+#ifdef DEBUG
+//#if 1
 						/* DEBUG */
 						printf("DEBUG: Distance Vector: ");
 						for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
@@ -575,14 +607,16 @@ int processTCPConnections(int ownNodeId)
 							printf("%d ", connectResponse.routeInformation.newDegV[ix]);
 						}
 						printf("\n");
+#endif // DEBUG
 
 						/*
 						 * Update your database here.....
 						 * 1. Distance Vector.
 						 * 2. Degree Vector
 						 */
-						routeUpdateResult = updateDVM(connectResponse.routeInformation);
+						routeUpdateResult = updateDVM(connectResponse.routeInformation, newNodeJoinUpdate, ownNodeId);
 
+#ifdef DEBUG
 						switch(routeUpdateResult)
 						{
 							case 0:	printf("DEBUG: No network change\n");
@@ -594,6 +628,7 @@ int processTCPConnections(int ownNodeId)
 							case 3: printf("DEBUG: Degree and Distance vector changed\n");
 									break;
 						}
+#endif // DEBUG
 
 						/* Signal the UDP thread */
 						if((rv = sem_post(&sem_connectRespWait)) == -1)
@@ -605,25 +640,7 @@ int processTCPConnections(int ownNodeId)
 					}
 					else
 					{
-						//mJoinRequest joinReq;
-
 						printf("ERROR: processTCPConnections, Incorrect mesgId:%d, fd:%d\n", messageId, ix);
-
-#if 0
-						messageSize = sizeof(joinReq) - sizeof(messageId);
-
-						if(receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize) == -1)
-						{
-							printf("ERROR: processTCPConnections, could receive only %d bytes\n", messageSize);
-							exit(1);
-						}
-
-						memcpy(&joinReq, buffer, messageSize);
-
-						printf("INFO: JoinReq received NodeId:%d Host:%s\n",
-
-						joinReq.nodeInformation.nodeId, joinReq.nodeInformation.hostName);
-#endif
 					}
 				}
 			} /* END got new incoming connection */
@@ -950,7 +967,9 @@ int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
 		/* Store socket information in Node Database */
 		nodeInformation[nodeId].tcpSocketFd = tcpSocket;												/* NodeId */
 
+#ifdef DEBUG
 		printf("DEBUG: UpdateNodeDb, NodeId:%d Socket:%d\n", nodeId, nodeInformation[nodeId].tcpSocketFd);
+#endif // DEBUG
 
 		strcpy(nodeInformation[nodeId].hostName, joinResponse->nodeInformation[ix].hostName);			/* HostName */
 		strcpy(nodeInformation[nodeId].tcpPortNumber, joinResponse->nodeInformation[ix].tcpPortNumber);	/* TCP Port */
@@ -1055,7 +1074,9 @@ int sendConnectReq(int toNodeId, int ownNodeId)
 
 	tcpSocketFd = nodeInformation[toNodeId].tcpSocketFd;
 
+#ifdef DEBUG
 	printf("DEBUG: sendConnectReq, NodeId:%d Socket:%d\n", toNodeId, nodeInformation[toNodeId].tcpSocketFd);
+#endif // DEBUG
 
 	sentBytes = sizeof(connectRequest);
 
@@ -1074,7 +1095,9 @@ int sendConnectReq(int toNodeId, int ownNodeId)
 	}
 	else
 	{
-		printf("DEBUG: ConnectReq sent to host:%s\n", nodeInformation[toNodeId].hostName);
+		printf("INFO: ConnectReq sent to NodeId:%d host:%s\n",
+				toNodeId,
+				nodeInformation[toNodeId].hostName);
 	}
 
 	return 0;

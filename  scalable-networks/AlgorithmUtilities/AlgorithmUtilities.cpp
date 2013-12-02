@@ -21,6 +21,11 @@ extern vector< vector<int> > AdjList;/* Used initially for calculating the DegV 
   *
   * @param[in] routeInformation: The route information which has the updates.
   *
+  * @param[in] eRouteType: This specifies what kind of update is this, a routine or
+  *                        a new node update
+  *
+  * @param[in] ownNodeId: Id of own node
+  *
   * @return
   * Return the type of outcome
   * DV       DegV    retVal
@@ -30,7 +35,7 @@ extern vector< vector<int> > AdjList;/* Used initially for calculating the DegV 
   * 1        1        3 - Change in both DegV and DV
   *
  ****************************************************************************************/
-int updateDVM(mRouteInformation routeInformation)
+int updateDVM(mRouteInformation routeInformation, eRouteType updateType, int ownNodeId)
 {
 	int degv_Val = 0 ;
 	int dv_Val = 0 ;
@@ -43,6 +48,12 @@ int updateDVM(mRouteInformation routeInformation)
 			degv_Val 	= 1 ;
 			DegV[i] 	= routeInformation.newDegV[i];
 		}
+	}
+
+	/* Update own node degree if this is a node join */
+	if(updateType == newNodeJoinUpdate)
+	{
+		DegV[ownNodeId] += 1;
 	}
 
 	/* Check for updates with the distance vectors */
@@ -61,11 +72,12 @@ int updateDVM(mRouteInformation routeInformation)
 }
 
 /****************************************************************************************
-  * updateDVM: Function to read the node configuration file and build node database
+  * BFS: Function to read the node configuration file and build node database
   *
   * @param[in] startNode: The nodeId from where BFS should start
   *
   * @param[in] ownNodeId: Own node id
+  *
   * @return void
   *
  ****************************************************************************************/

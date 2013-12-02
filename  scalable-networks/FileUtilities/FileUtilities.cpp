@@ -252,8 +252,10 @@ int fillAlgorithmDB(char *connectionsInfoFile, int ownNodeId)
 		}
 	}
 
+//#ifdef DEBUG
+#if 1
 	/* DEBUG */
-	printf("fillAlgorithmDBy\n");
+	printf("fillAlgorithmDB\n");
 	printf("DEBUG: Distance Vector: ");
 	for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
@@ -267,6 +269,7 @@ int fillAlgorithmDB(char *connectionsInfoFile, int ownNodeId)
 		printf("%d ",DegV[ix]);
 	}
 	printf("\n");
+#endif // DEBUG
 
 	DVM[ownNodeId][ownNodeId] = 0 ;
 
@@ -332,7 +335,7 @@ int fillAlgorithmDB(char *connectionsInfoFile, int ownNodeId)
 	/* Since we now have the adjacency list filled up we can initialize the degree vector */
 	for(int i = 0 ; i < AdjList.size() ; i++)
 	{
-		DegV[i] = AdjList.at(i).size() ;
+		DegV[i] = AdjList.at(i).size();
 	}
 
 	/* Now perform BFS on each element of myNeigh
