@@ -253,9 +253,6 @@ int processTCPConnections(int ownNodeId)
 	char buffer[200];
 	int messageSize	= -1;
 	eMessageId messageId;
-	mConnectRequest connectRequest;
-	mConnectResponse connectResponse;
-	mRouteInformation routeInformation;
 	int rv;
 	int nodeId;
 	int jx;
@@ -407,7 +404,7 @@ int processTCPConnections(int ownNodeId)
 					printf("DEBUG: Data received by the node\n");
 #endif // DEBUG
 
-					memset(buffer, 0, 200);			/* Clear buffer before use */
+					memset(buffer, 0, sizeof(buffer));			/* Clear buffer before use */
 
 					/* Read just the message type - 4 bytes */
 					recv(ix, &messageId, sizeof(messageId), 0);
@@ -420,6 +417,9 @@ int processTCPConnections(int ownNodeId)
 
 					if(messageId == ConnectionRequest)
 					{
+						mConnectResponse connectResponse;
+						mConnectRequest connectRequest;
+
 						messageSize = sizeof(connectRequest) - sizeof(messageId);
 
 						if(receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize) == -1)
@@ -492,6 +492,8 @@ int processTCPConnections(int ownNodeId)
 					}
 					else if(messageId == RouteInformation)
 					{
+						mRouteInformation routeInformation;
+
 						messageSize = sizeof(routeInformation) - sizeof(messageId);
 
 						if(receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize) == -1)
@@ -503,27 +505,6 @@ int processTCPConnections(int ownNodeId)
 						memcpy(&routeInformation, buffer, messageSize);
 
 						printf("INFO: RouteInformation received NodeId:%d\n", routeInformation.nodeId);
-
-//#ifdef DEBUG
-#if 1
-						printf("INFO: RouteInformation received NodeId:%d, contents are below\n",
-								routeInformation.nodeId);
-
-						/* DEBUG */
-						printf("DEBUG: Distance Vector: ");
-						for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
-						{
-							printf("%d ", routeInformation.newDistV[ix]);
-						}
-						printf("\n");
-
-						printf("DEBUG: Degree Vector: ");
-						for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
-						{
-							printf("%d ", routeInformation.newDegV[ix]);
-						}
-						printf("\n");
-#endif // DEBUG
 
 						/*
 						 *	Update your routing table with information from neighbor nodes
@@ -579,6 +560,8 @@ int processTCPConnections(int ownNodeId)
 					}
 					else if(messageId == ConnectionResponse)
 					{
+						mConnectResponse connectResponse;
+
 						messageSize = sizeof(connectResponse) - sizeof(messageId);
 
 						if(receiveDataOnTCP(ix, buffer+sizeof(messageId), &messageSize) == -1)
@@ -591,44 +574,13 @@ int processTCPConnections(int ownNodeId)
 
 						printf("DEBUG: Received connection response from NodeId:%d\n",connectResponse.nodeId);
 
-#ifdef DEBUG
-//#if 1
-						/* DEBUG */
-						printf("DEBUG: Distance Vector: ");
-						for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
-						{
-							printf("%d ", connectResponse.routeInformation.newDistV[ix]);
-						}
-						printf("\n");
-
-						printf("DEBUG: Degree Vector: ");
-						for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
-						{
-							printf("%d ", connectResponse.routeInformation.newDegV[ix]);
-						}
-						printf("\n");
-#endif // DEBUG
-
 						/*
 						 * Update your database here.....
 						 * 1. Distance Vector.
 						 * 2. Degree Vector
 						 */
-						routeUpdateResult = updateDVM(connectResponse.routeInformation, newNodeJoinUpdate, ownNodeId);
 
-#ifdef DEBUG
-						switch(routeUpdateResult)
-						{
-							case 0:	printf("DEBUG: No network change\n");
-									break;
-							case 1: printf("DEBUG: Degree vector changed\n");
-									break;
-							case 2: printf("DEBUG: Distance vector changed\n");
-									break;
-							case 3: printf("DEBUG: Degree and Distance vector changed\n");
-									break;
-						}
-#endif // DEBUG
+						routeUpdateResult = updateDVM(connectResponse.routeInformation, newNodeJoinUpdate, ownNodeId);
 
 						/* Signal the UDP thread */
 						if((rv = sem_post(&sem_connectRespWait)) == -1)
@@ -1169,7 +1121,7 @@ int sendRouteUpdate(int toNodeId, int ownNodeId)
 	tcpSocketFd = nodeInformation[toNodeId].tcpSocketFd;
 
 	/* Clear data */
-	memset(sendBuffer, 0, 200);
+	memset(sendBuffer, 0, sizeof(sendBuffer));
 
 	sendBytes = sizeof(routeInformation);
 
