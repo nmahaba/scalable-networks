@@ -46,6 +46,7 @@ int updateDVM(mRouteInformation routeInformation, eRouteType updateType, int own
 		if(DegV[i] < routeInformation.newDegV[i])
 		{
 			degv_Val 	= 1 ;
+
 			DegV[i] 	= routeInformation.newDegV[i];
 		}
 	}
