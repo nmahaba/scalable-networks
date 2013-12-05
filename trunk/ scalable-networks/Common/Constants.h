@@ -9,12 +9,11 @@
 #define NO_VALUE								0xFFFF
 #define TRUE									1
 #define FALSE									0
-#define MAX_NUM_OF_NON_PRIME_NODES				3
 #define TCP_CONNECTION							1
 #define UDP_CONNECTION							2
 #define SERVER									1
 #define CLIENT									0
-#define NODES_TO_JOIN							2
+#define NODES_TO_JOIN							5
 #define INFINITY 								NO_VALUE
 #define MYPORT 									"4950"    	/* The port users will be connecting to */
 #define MAXBUFLEN								1000

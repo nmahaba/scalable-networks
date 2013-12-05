@@ -16,7 +16,7 @@ typedef struct
 {
 	eMessageId 		messageId;
 	int				nodeCount;
-	SNodeInformation nodeInformation[MAX_NUM_OF_NON_PRIME_NODES];
+	SNodeInformation nodeInformation[NODES_TO_JOIN];
 }mJoinResponse;
 
 #endif /* SJOINRESPONSE_H_ */
