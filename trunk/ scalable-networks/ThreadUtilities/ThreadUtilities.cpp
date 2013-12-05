@@ -21,6 +21,9 @@ extern sem_t sem_connectRespWait;
 extern sem_t sem_startTcpConListen;
 extern int numOfPrimeNodes;
 extern vector<int> barbasiBag;								/* Used for Barbasi model */
+extern int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
+extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
+extern int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
 
 /*********************************************************************************************************
  /** spawnUdpThreadForQueries: Function to spawn a thread to handle UDP messages for node queries
@@ -56,7 +59,154 @@ void *handleNodeQueries(void *data)
 {
 	printf("INFO: UDP Thread for handling Node Query messages\n");
 
-	while(1);
+	int sockfd;
+	struct addrinfo hints, *servinfo, *p;
+	int rv;
+	int numbytes;
+	struct sockaddr_storage their_addr;
+	char buf[MAXBUFLEN];
+	socklen_t addr_len;
+	//char s[INET6_ADDRSTRLEN];
+	int ix, jx;
+	int mynodeid =0, fdistance =0;
+	int dist[MAX_NUMBER_OF_NODES], nexthop[MAX_NUMBER_OF_NODES];
+	int col, row;
+	char sendinfo[1000];
+	SQMessage qmesg;
+
+	for (ix=0; ix<MAX_NUMBER_OF_NODES; ix++)
+	{
+		if (DistV[ix] == 0)
+		{
+			mynodeid = ix;
+		}
+	}
+
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family 	= AF_UNSPEC; 	// Set to AF_INET to force IPv4
+	hints.ai_socktype 	= SOCK_DGRAM;
+	hints.ai_flags 		= AI_PASSIVE; 	// Use my IP
+
+	if ((rv = getaddrinfo(NULL, MYPORT, &hints, &servinfo)) != 0)
+	{
+		printf("ERROR: handleNodeQueries, getaddrinfo: %s\n", gai_strerror(rv));
+		return 0;
+	}
+
+	/* Loop through all the results and bind to the first we can */
+	for (p = servinfo; p != NULL; p = p->ai_next)
+	{
+		if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+		{
+#ifdef DEBUG
+			printf("ERROR: handleNodeQueries, UDP QUERY THREAD: socket");
+#endif // DEBUG
+			continue;
+		}
+
+		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1)
+		{
+			close(sockfd);
+
+#ifdef DEBUG
+			printf("ERROR: handleNodeQueries,UDP QUERY THREAD: bind");
+#endif // DEBUG
+			continue;
+		}
+
+		break;
+	}
+
+	if (p == NULL)
+	{
+		fprintf(stderr, "UDP QUERY THREAD: failed to bind socket\n");
+		return 0;
+	}
+
+	freeaddrinfo(servinfo);
+
+	printf("UDP QUERY THREAD: waiting to query messages...\n");
+
+	while (1)
+	{
+		addr_len = sizeof their_addr;
+
+		if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1, 0, (struct sockaddr *)&their_addr, &addr_len)) == -1)
+		{
+			printf("recvfrom");
+			return 0;
+		}
+
+		printf("INFO: TestNode queried for Routing Table information\n");
+
+		//put mutex lock here and update the database.
+
+		/* Get lock for NodeDB */
+
+		pthread_mutex_lock(&mutex_nodeDB);
+
+		for (ix=0; ix<MAX_NUMBER_OF_NODES; ix++)
+		{
+			if (DistV[ix]!= 65535)
+			{
+				if (DistV[ix] > fdistance)
+				{
+					fdistance = DistV[ix];
+				}
+			}
+		}
+
+		for (col=0; col<MAX_NUMBER_OF_NODES; col++)
+		{
+			dist[col] = DVM[1][col];
+			nexthop[col] = mynodeid;
+
+			for (row = 0; row<MAX_NUMBER_OF_NODES; row++)
+			{
+				if (DVM[row][col] <= dist[col])
+				{
+					dist[col] = DVM[row][col];
+
+					if (dist[col] != 65535)
+					{
+						nexthop[col] = row;
+					}
+				}
+			}
+		}
+
+		qmesg.nodeId = mynodeid;
+		qmesg.fdistance = fdistance;
+
+		for (int i =0; i<MAX_NUMBER_OF_NODES; i++)
+		{
+			qmesg.routing_tab[i][0] = i;
+		}
+
+		for (int i =0; i<MAX_NUMBER_OF_NODES; i++)
+		{
+			qmesg.routing_tab[i][1] = dist[i];
+		}
+
+		for (int i =0; i<MAX_NUMBER_OF_NODES; i++)
+		{
+			qmesg.routing_tab[i][2] = nexthop[i];
+		}
+
+		/* Release lock for NodeDB */
+		pthread_mutex_unlock(&mutex_nodeDB);
+
+		memcpy(sendinfo, &qmesg, sizeof(SQMessage));
+
+		if ((numbytes = sendto(sockfd, sendinfo, sizeof(SQMessage), 0, (struct sockaddr *)&their_addr, addr_len)) < 0)
+		{
+			printf("ERROR: handleNodeQueries, sending Query Response failed, ECODE:%s\n", gai_strerror(numbytes));
+
+			exit(1);
+		}
+	}
+
+	close(sockfd);
 }
 
 /*********************************************************************************************************
