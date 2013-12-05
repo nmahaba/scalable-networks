@@ -24,6 +24,7 @@ extern vector<int> barbasiBag;								/* Used for Barbasi model */
 extern int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
 extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
 extern int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
+extern int numOfPrimeNodes;
 
 /*********************************************************************************************************
  /** spawnUdpThreadForQueries: Function to spawn a thread to handle UDP messages for node queries
@@ -262,6 +263,7 @@ void *handleNodeEntry(void *data)
 	vector<int> mSet;
 	int randomIndex;
 	int candidateNodeId;
+	int queryNodeId;
 
 	printf("INFO: UDP Thread for handling Node Entry\n");
 	srand(time(NULL));
@@ -283,9 +285,10 @@ void *handleNodeEntry(void *data)
 	{
 		/* Send JoinReq randomly to some prime node - Below its always sent to the first node */
 		/* << Place Holder >> */
+		queryNodeId = getRandomNumber(1, numOfPrimeNodes);
 
 		/* Send JoinReq to one of the prime nodes and wait for JoinResp from it */
-		if(sendJoinReq(1, ownNodeId, &joinResponse) == -1)
+		if(sendJoinReq(queryNodeId, ownNodeId, &joinResponse) == -1)
 		{
 			exit(0);
 		}

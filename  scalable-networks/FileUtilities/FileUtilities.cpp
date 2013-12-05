@@ -121,6 +121,8 @@ int initializeNodeDB(char *nodeInfoFile)
 		nodeInformation[nodeId].tcpSocketFd = -1;
 	}
 	
+	printf("DEBUG: We have %d prime nodes\n", numOfPrimeNodes);
+
 	fclose(fd_nodeInfoFile);
 
 	/* Release lock for NodeDB */
