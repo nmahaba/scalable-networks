@@ -21,6 +21,8 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <AlgorithmUtilities.h>
+#include <vector>
+#include <algorithm>
 
 /****************************************************************************************
  /** sendDataOnTCP: Function to send data completely
@@ -143,10 +145,12 @@ int sendConnectReq(int toNodeId, int ownNodeId);
   *
   * @param[in] ownNodeId: Own node Id
   *
+  * @param[in] originatorNode: This indicates if this node is the originator of the update
+  *
   * @return 0 if PASSED or -1 if FAILED
  *
  ****************************************************************************************/
-int sendRouteUpdate(int toNodeId, int ownNodeId);
+int sendRouteUpdate(int toNodeId, int ownNodeId, int originatorNode);
 
 /* Debug */
 void printDistanceVector();

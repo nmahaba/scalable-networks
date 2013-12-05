@@ -2,6 +2,8 @@
 
 //#define DEBUG
 
+using namespace std;
+
 /* EXTERN declarations - START 	*/
 extern SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 extern int connectionInfo[MAX_NUMBER_OF_NODES];
@@ -12,6 +14,7 @@ extern int primeNode;
 extern int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
 extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
 extern int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
+extern vector<int> barbasiBag;								/* Used for Barbasi model */
 /* EXTERN declarations - END 	*/
 
 static void printNodeDB()
@@ -22,7 +25,7 @@ static void printNodeDB()
 	//pthread_mutex_lock(&mutex_nodeDB);
 
 	printf("*****************************************\n");
-	printf("NodeId\tHostName\tTCPPort\tUDPPort\tTCPPort\n");
+	printf("NodeId\tHostName\tTCPPort\tUDPPort\tTCPSocket\n");
 	printf("*****************************************\n");
 
 	for(index=1 ; index<MAX_NUMBER_OF_NODES ; index++)
@@ -514,6 +517,15 @@ int processTCPConnections(int ownNodeId)
 						 */
 
 						routeUpdateResult = updateDVM(routeInformation, routineUpdate, ownNodeId);
+//#ifdef DEBUG
+#if 1
+						printf("DEBUG: Barbasi Bag contents:\n");
+						for(int ax=0 ; ax<barbasiBag.size() ; ax++)
+						{
+							printf("%d ", barbasiBag.at(ax));
+						}
+						printf("\n");
+#endif // DEBUG
 
 						/* Display the result of the routing update */
 						switch(routeUpdateResult)
@@ -530,6 +542,13 @@ int processTCPConnections(int ownNodeId)
 
 						if(routeUpdateResult > 0)
 						{
+							/* Update the database */
+							int originatorNodeId = routeInformation.nodeInformation.nodeId;
+
+							nodeInformation[originatorNodeId].nodeId = originatorNodeId;
+							strcpy(nodeInformation[originatorNodeId].hostName, routeInformation.nodeInformation.hostName);			/* HostName */
+							strcpy(nodeInformation[originatorNodeId].tcpPortNumber, routeInformation.nodeInformation.tcpPortNumber);	/* TCP Port */
+							strcpy(nodeInformation[originatorNodeId].udpPortNumber, routeInformation.nodeInformation.udpPortNumber);	/* UDP Port */
 //#ifdef DEBUG
 #if 1
 							/* DEBUG - Print Distance Vector and Degree Vector */
@@ -547,7 +566,7 @@ int processTCPConnections(int ownNodeId)
 								/* Don't send to yourself and the source of the message */
 								if((nodeInformation[jx].nodeId != ownNodeId) && (nodeInformation[jx].nodeId != routeInformation.nodeId) && (nodeInformation[jx].tcpSocketFd != -1))
 								{
-									if(sendRouteUpdate(nodeInformation[jx].nodeId, ownNodeId) == -1)
+									if(sendRouteUpdate(nodeInformation[jx].nodeId, ownNodeId, routeInformation.nodeId) == -1)
 									{
 										exit(1);
 									}
@@ -581,6 +600,16 @@ int processTCPConnections(int ownNodeId)
 						 */
 
 						routeUpdateResult = updateDVM(connectResponse.routeInformation, newNodeJoinUpdate, ownNodeId);
+
+//#ifdef DEBUG
+#if 1
+						printf("DEBUG: Barbasi Bag contents:\n");
+						for(int ax=0 ; ax<barbasiBag.size() ; ax++)
+						{
+							printf("%d ", barbasiBag.at(ax));
+						}
+						printf("\n");
+#endif // DEBUG
 
 						/* Signal the UDP thread */
 						if((rv = sem_post(&sem_connectRespWait)) == -1)
@@ -917,12 +946,13 @@ int sendJoinReq(int toNodeId, int ownNodeId, mJoinResponse* joinResponse)
 		pthread_mutex_lock(&mutex_nodeDB);
 
 		/* Store socket information in Node Database */
-		nodeInformation[nodeId].tcpSocketFd = tcpSocket;												/* NodeId */
+		nodeInformation[nodeId].tcpSocketFd = tcpSocket;												/* TCP Socket */
 
 #ifdef DEBUG
-		printf("DEBUG: UpdateNodeDb, NodeId:%d Socket:%d\n", nodeId, nodeInformation[nodeId].tcpSocketFd);
+		printf("DEBUG: sendJoinReq, NodeId:%d Socket:%d\n", nodeId, nodeInformation[nodeId].tcpSocketFd);
 #endif // DEBUG
 
+		nodeInformation[nodeId].nodeId	=	nodeId;														/* NodeId */
 		strcpy(nodeInformation[nodeId].hostName, joinResponse->nodeInformation[ix].hostName);			/* HostName */
 		strcpy(nodeInformation[nodeId].tcpPortNumber, joinResponse->nodeInformation[ix].tcpPortNumber);	/* TCP Port */
 		strcpy(nodeInformation[nodeId].udpPortNumber, joinResponse->nodeInformation[ix].udpPortNumber);	/* UDP Port */
@@ -1023,12 +1053,10 @@ int sendConnectReq(int toNodeId, int ownNodeId)
 	connectRequest.messageId = ConnectionRequest;
 	connectRequest.nodeInformation.nodeId = ownNodeId;
 	strcpy(connectRequest.nodeInformation.hostName, nodeInformation[ownNodeId].hostName);
+	strcpy(connectRequest.nodeInformation.tcpPortNumber, nodeInformation[ownNodeId].tcpPortNumber);
+	strcpy(connectRequest.nodeInformation.udpPortNumber, nodeInformation[ownNodeId].udpPortNumber);
 
 	tcpSocketFd = nodeInformation[toNodeId].tcpSocketFd;
-
-#ifdef DEBUG
-	printf("DEBUG: sendConnectReq, NodeId:%d Socket:%d\n", toNodeId, nodeInformation[toNodeId].tcpSocketFd);
-#endif // DEBUG
 
 	sentBytes = sizeof(connectRequest);
 
@@ -1062,10 +1090,14 @@ int sendConnectReq(int toNodeId, int ownNodeId)
   *
   * @param[in] ownNodeId: Own node Id
   *
+  * @param[in] originatorNode: This indicates if this node is the originator of the update
+  *                            -1: Originator node
+  *                            else node is formwarding the message
+  *
   * @return 0 if PASSED or -1 if FAILED
  *
  ****************************************************************************************/
-int sendRouteUpdate(int toNodeId, int ownNodeId)
+int sendRouteUpdate(int toNodeId, int ownNodeId, int originatorNode)
 {
 	mRouteInformation routeInformation;
 	int tcpSocketFd;
@@ -1096,6 +1128,23 @@ int sendRouteUpdate(int toNodeId, int ownNodeId)
 	memcpy(routeInformation.newDegV, DegV, sizeof(DegV));
 	memcpy(routeInformation.newDistV, DistV, sizeof(DistV));
 
+	if(originatorNode == -1)
+	{
+		/* This node is the originator, hence own node information */
+		routeInformation.nodeInformation.nodeId = ownNodeId;
+		strcpy(routeInformation.nodeInformation.hostName,nodeInformation[ownNodeId].hostName);
+		strcpy(routeInformation.nodeInformation.tcpPortNumber, nodeInformation[ownNodeId].tcpPortNumber);
+		strcpy(routeInformation.nodeInformation.udpPortNumber, nodeInformation[ownNodeId].udpPortNumber);
+	}
+	else
+	{
+		/* Forwarding the route information from some other node, fill its information */
+		routeInformation.nodeInformation.nodeId = originatorNode;
+		strcpy(routeInformation.nodeInformation.hostName,nodeInformation[originatorNode].hostName);
+		strcpy(routeInformation.nodeInformation.tcpPortNumber, nodeInformation[originatorNode].tcpPortNumber);
+		strcpy(routeInformation.nodeInformation.udpPortNumber, nodeInformation[originatorNode].udpPortNumber);
+	}
+
 #ifdef DEBUG
 	/* DEBUG */
 	printf("DEBUG: Distance Vector: ");
@@ -1107,15 +1156,14 @@ int sendRouteUpdate(int toNodeId, int ownNodeId)
 	}
 	printf("\n");
 
-	printf("DEBUG: Degree Vector: ");
+	printf("DEBUG: Before sending RouteUpdate Degree Vector: ");
 	for(int ix=0 ; ix<MAX_NUMBER_OF_NODES ; ix++)
 	{
-		printf("Orig:%d Copy:%d\n",
-				DegV[ix],
-				routeInformation.newDegV[ix]);
+		printf("%d ",DegV[ix]);
 	}
 	printf("\n");
 #endif // DEBUG
+
 
 	/* Get the socket fd from database */
 	tcpSocketFd = nodeInformation[toNodeId].tcpSocketFd;

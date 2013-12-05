@@ -11,13 +11,15 @@
 #include <EMessageId.h>
 #include <vector>
 #include <Constants.h>
+#include <SNodeInformation.h>
 
 typedef struct
 {
 	eMessageId 		messageId;
 	int 			nodeId;
-    int 			newDistV[MAX_NUMBER_OF_NODES] ;
-    int 			newDegV[MAX_NUMBER_OF_NODES] ;
+    int 			newDistV[MAX_NUMBER_OF_NODES];
+    int 			newDegV[MAX_NUMBER_OF_NODES];
+    SNodeInformation nodeInformation;
 }mRouteInformation;
 
 #endif /* SROUTEINFORMATION_H_ */

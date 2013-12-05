@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <string.h>
 #include <SocketUtilities.h>
+#include <vector>
 
 /*********************************************************************************************************
  /** spawnUdpThreadForQueries: Function to spawn a thread to handle UDP messages for node queries

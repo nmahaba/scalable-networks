@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <signal.h>
+#include <vector>
 
 //#define DEBUG
 
@@ -30,6 +31,7 @@ int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matri
 int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
 int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
 vector< vector<int> > AdjList(MAX_NUMBER_OF_NODES); /* Used initially for calculating the DegV */
+vector<int> barbasiBag;								/* Used for Barbasi model */
 
 /* Mutex */
 pthread_mutex_t mutex_nodeDB;

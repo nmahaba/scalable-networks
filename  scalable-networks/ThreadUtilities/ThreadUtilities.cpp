@@ -7,6 +7,8 @@
 #include <ThreadUtilities.h>
 #include <pthread.h>
 
+using namespace std;
+
 /* Extern */
 extern pthread_attr_t udpQueryThreadAttr;
 extern pthread_t udpQueryThread;
@@ -18,6 +20,7 @@ extern int primeNode;
 extern sem_t sem_connectRespWait;
 extern sem_t sem_startTcpConListen;
 extern int numOfPrimeNodes;
+extern vector<int> barbasiBag;								/* Used for Barbasi model */
 
 /*********************************************************************************************************
  /** spawnUdpThreadForQueries: Function to spawn a thread to handle UDP messages for node queries
@@ -83,61 +86,6 @@ int spawnUdpThreadForEntryHandler(int *ownNodeId)
 	return 0;
 }
 
-int dummyConnectionCreator(int nodeId)
-{
-	int returngetaddrinfo;
-	struct addrinfo tempSocketInfo, *finalSocketInfo, *iSocketLoopIter;
-
-	/* Check if connection has to be established with a particular node */
-	/* If connectionInfo[nodeId] is set then a connection has to be established with it*/
-	(void) memset(&tempSocketInfo, 0, sizeof tempSocketInfo); 	/* Remember this, this COSTED you much */
-	tempSocketInfo.ai_family 	=   AF_UNSPEC; 					/* Don't care IPv4 or IPv6 */
-	tempSocketInfo.ai_socktype 	=   SOCK_STREAM; 				/* TCP stream sockets */
-
-	if((returngetaddrinfo = getaddrinfo(nodeInformation[nodeId].hostName, nodeInformation[nodeId].tcpPortNumber, &tempSocketInfo, &finalSocketInfo)) != 0)
-	{
-		printf("Error: connectToPrimeNodes ECODE %s for %s Port %s\n", strerror(returngetaddrinfo), nodeInformation[nodeId].hostName,
-				nodeInformation[nodeId].tcpPortNumber);
-
-		return -1;
-	}
-
-	/* Loop through all valid values return by getaddrinfo() */
-	for(iSocketLoopIter = finalSocketInfo ; iSocketLoopIter != NULL ; iSocketLoopIter = iSocketLoopIter->ai_next)
-	{
-		if ((nodeInformation[nodeId].tcpSocketFd = socket(iSocketLoopIter->ai_family, iSocketLoopIter->ai_socktype, iSocketLoopIter->ai_protocol)) == -1)
-		{
-			perror("Error: Socket connection failed\n");
-			continue;
-		}
-
-		if (-1 == connect(nodeInformation[nodeId].tcpSocketFd, iSocketLoopIter->ai_addr, iSocketLoopIter->ai_addrlen))
-		{
-#ifdef DEBUG
-			printf("DEBUG: Cannot connect, socketFd %d\n", nodeInformation[nodeId].tcpSocketFd);
-#endif // DEBUG
-
-			close(nodeInformation[nodeId].tcpSocketFd);
-
-#ifdef DEBUG
-			printf("Node %s CANT connect to %s, ErrorCode %s\n", nodeInformation[ownNodeId].hostName, nodeInformation[ix].hostName, strerror(errno));
-#endif
-			continue;
-		}
-		else
-		{
-			/* Connection established */
-			printf("Connected to %s\n", nodeInformation[nodeId].hostName);
-		}
-
-		break;
-	}
-
-	freeaddrinfo(finalSocketInfo);
-
-	return 0;
-}
-
 /*
  * handleNodeEntry: Function executes on a new thread and handles the UDP, node query messages
  */
@@ -161,8 +109,12 @@ void *handleNodeEntry(void *data)
 	int numOfConnectionRespReceived = 0;
 	int rv;
 	int node1, node2;
+	vector<int> mSet;
+	int randomIndex;
+	int candidateNodeId;
 
 	printf("INFO: UDP Thread for handling Node Entry\n");
+	srand(time(NULL));
 
 	/*
 	 * If non- prime node, then perform the below
@@ -220,7 +172,7 @@ void *handleNodeEntry(void *data)
 		/* For loop for sending RouteInformation for M neighbors */
 		for(ix=0 ; ix<joinResponse.nodeCount ; ix++)
 		{
-			if(sendRouteUpdate(joinResponse.nodeInformation[ix].nodeId, ownNodeId) == -1)
+			if(sendRouteUpdate(joinResponse.nodeInformation[ix].nodeId, ownNodeId, -1) == -1)
 			{
 				exit(1);
 			}
@@ -275,21 +227,43 @@ void *handleNodeEntry(void *data)
 			joinResponse.messageId = JoinResponse;
 			joinResponse.nodeCount = NODES_TO_JOIN;				/* M is 2, check Constants.h file */
 
-			node1 = getRandomNumber(1, numOfPrimeNodes+1);
+			/* Clear M set */
+			mSet.clear();
 
-			/* Node 4 */
-			joinResponse.nodeInformation[0].nodeId = nodeInformation[node1].nodeId;
-			strcpy(joinResponse.nodeInformation[0].hostName,nodeInformation[node1].hostName);
-			strcpy(joinResponse.nodeInformation[0].tcpPortNumber, nodeInformation[node1].tcpPortNumber);
-			strcpy(joinResponse.nodeInformation[0].udpPortNumber, nodeInformation[node1].udpPortNumber);
+			while(true)
+			{
+				if(mSet.size() == NODES_TO_JOIN)
+				{
+					break;
+				}
 
-			while((node2 = getRandomNumber(1, numOfPrimeNodes)) == node1);
+				randomIndex = getRandomNumber(0, barbasiBag.size());
 
-			/* Node 5 */
-			joinResponse.nodeInformation[1].nodeId = nodeInformation[node2].nodeId;
-			strcpy(joinResponse.nodeInformation[1].hostName,nodeInformation[node2].hostName);
-			strcpy(joinResponse.nodeInformation[1].tcpPortNumber, nodeInformation[node2].tcpPortNumber);
-			strcpy(joinResponse.nodeInformation[1].udpPortNumber, nodeInformation[node2].udpPortNumber);
+				/* Safety check */
+				if(randomIndex >= barbasiBag.size())
+				{
+					continue;
+				}
+
+				if(find(mSet.begin(), mSet.end(), barbasiBag.at(randomIndex)) != mSet.end())
+				{
+					continue;
+				}
+
+				mSet.push_back(barbasiBag.at(randomIndex));
+			}
+
+			for(int ix=0 ; ix<NODES_TO_JOIN ; ix++)
+			{
+				candidateNodeId = mSet.at(ix);
+
+				printf("DEBUG: Winner NodeId:%d Host:%s\n", candidateNodeId, nodeInformation[candidateNodeId].hostName);
+
+				joinResponse.nodeInformation[ix].nodeId = nodeInformation[candidateNodeId].nodeId;
+				strcpy(joinResponse.nodeInformation[ix].hostName,nodeInformation[candidateNodeId].hostName);
+				strcpy(joinResponse.nodeInformation[ix].tcpPortNumber, nodeInformation[candidateNodeId].tcpPortNumber);
+				strcpy(joinResponse.nodeInformation[ix].udpPortNumber, nodeInformation[candidateNodeId].udpPortNumber);
+			}
 
 			/********************************************************************************************************
 			 ********************************************************************************************************
