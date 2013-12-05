@@ -517,8 +517,8 @@ int processTCPConnections(int ownNodeId)
 						 */
 
 						routeUpdateResult = updateDVM(routeInformation, routineUpdate, ownNodeId);
-//#ifdef DEBUG
-#if 1
+#ifdef DEBUG
+//#if 1
 						printf("DEBUG: Barbasi Bag contents:\n");
 						for(int ax=0 ; ax<barbasiBag.size() ; ax++)
 						{
@@ -601,8 +601,8 @@ int processTCPConnections(int ownNodeId)
 
 						routeUpdateResult = updateDVM(connectResponse.routeInformation, newNodeJoinUpdate, ownNodeId);
 
-//#ifdef DEBUG
-#if 1
+#ifdef DEBUG
+//#if 1
 						printf("DEBUG: Barbasi Bag contents:\n");
 						for(int ax=0 ; ax<barbasiBag.size() ; ax++)
 						{
@@ -1063,7 +1063,7 @@ int sendConnectReq(int toNodeId, int ownNodeId)
 	/* Clear sendBuffer before using it */
 	memset(sendBuffer,0, sizeof(sendBuffer));
 
-	/* Copy the date to be trasnmitted */
+	/* Copy the date to be transmitted */
 	memcpy(sendBuffer, &connectRequest, sentBytes);
 
 	if(sendDataOnTCP(tcpSocketFd, sendBuffer, &sentBytes) == -1)

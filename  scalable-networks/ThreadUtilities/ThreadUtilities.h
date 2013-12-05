@@ -13,6 +13,7 @@
 #include <string.h>
 #include <SocketUtilities.h>
 #include <vector>
+#include <SQMessage.h>
 
 /*********************************************************************************************************
  /** spawnUdpThreadForQueries: Function to spawn a thread to handle UDP messages for node queries

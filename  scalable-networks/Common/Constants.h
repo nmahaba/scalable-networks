@@ -16,6 +16,8 @@
 #define CLIENT									0
 #define NODES_TO_JOIN							2
 #define INFINITY 								NO_VALUE
+#define MYPORT 									"4950"    	/* The port users will be connecting to */
+#define MAXBUFLEN								1000
 
 #endif // CONSTANTS_H
 
