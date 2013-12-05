@@ -13,7 +13,8 @@ using namespace std;
 extern int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
 extern int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
 extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
-extern vector< vector<int> > AdjList;/* Used initially for calculating the DegV */
+extern vector< vector<int> > AdjList;						/* Used initially for calculating the DegV */
+extern vector<int> barbasiBag;								/* Used for Barbasi model */
 /* EXTERN declarations - END 	*/
 
 /****************************************************************************************
@@ -39,14 +40,24 @@ int updateDVM(mRouteInformation routeInformation, eRouteType updateType, int own
 {
 	int degv_Val = 0 ;
 	int dv_Val = 0 ;
+	int deltaDegree = 0;
 
 	/* Check for updates with the degree vectors */
 	for(int i = 0 ; i < MAX_NUMBER_OF_NODES ; i++)
 	{
-		if(DegV[i] < routeInformation.newDegV[i])
-		{
-			degv_Val 	= 1 ;
+		deltaDegree = routeInformation.newDegV[i] - DegV[i];
 
+		if(deltaDegree > 0)
+		{
+			degv_Val 	= 1;
+
+			/* Add the difference token into the bag because it already has the initial tokens */
+			for(int j=0 ; j<deltaDegree ; j++)
+			{
+				barbasiBag.push_back(i);
+			}
+
+			/* Normal update */
 			DegV[i] 	= routeInformation.newDegV[i];
 		}
 	}
@@ -54,7 +65,15 @@ int updateDVM(mRouteInformation routeInformation, eRouteType updateType, int own
 	/* Update own node degree if this is a node join */
 	if(updateType == newNodeJoinUpdate)
 	{
+		/* Increa my node degree */
 		DegV[ownNodeId] += 1;
+
+		/* Account for your own connection */
+		barbasiBag.push_back(ownNodeId);
+
+		/* Update your DegV and BarbasiBag with information about the node sending the Connection Response */
+		DegV[routeInformation.nodeId] += 1;
+		barbasiBag.push_back(routeInformation.nodeId);
 	}
 
 	/* Check for updates with the distance vectors */

@@ -19,6 +19,7 @@ extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
 extern vector< vector<int> > AdjList;  						/* Used initially for calculating the DegV */
 extern pthread_mutex_t mutex_nodeDB;
 extern int numOfPrimeNodes;
+extern vector<int> barbasiBag;								/* Used for Barbasi model */
 /* EXTERN declarations - END 	*/
 
 /****************************************************************************************
@@ -317,6 +318,12 @@ int fillAlgorithmDB(char *connectionsInfoFile, int ownNodeId)
 	for(int i = 0 ; i < AdjList.size() ; i++)
 	{
 		DegV[i] = AdjList.at(i).size();
+
+		/* Insert tokens into the bag equivalent to the node degree */
+		for(int j=0 ; j<DegV[i] ; j++ )
+		{
+			barbasiBag.push_back(i);
+		}
 	}
 
 	/* Now perform BFS on each element of myNeigh
