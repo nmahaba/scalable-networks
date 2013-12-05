@@ -25,6 +25,7 @@ extern int DistV[MAX_NUMBER_OF_NODES];					 	/* The distance vector */
 extern int DegV[MAX_NUMBER_OF_NODES];						/* The degree vector */
 extern int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
 extern int numOfPrimeNodes;
+extern int numOfNodesToJoin;
 
 /*********************************************************************************************************
  /** spawnUdpThreadForQueries: Function to spawn a thread to handle UDP messages for node queries
@@ -378,14 +379,14 @@ void *handleNodeEntry(void *data)
 			/* For the time being select 2 nodes, node 4 and node 5 for new connection */
 			/* Prepare the message to be sent */
 			joinResponse.messageId = JoinResponse;
-			joinResponse.nodeCount = NODES_TO_JOIN;				/* M is 2, check Constants.h file */
+			joinResponse.nodeCount = numOfNodesToJoin;				/* M is 2, check Constants.h file */
 
 			/* Clear M set */
 			mSet.clear();
 
 			while(true)
 			{
-				if(mSet.size() == NODES_TO_JOIN)
+				if(mSet.size() == numOfNodesToJoin)
 				{
 					break;
 				}
@@ -406,7 +407,7 @@ void *handleNodeEntry(void *data)
 				mSet.push_back(barbasiBag.at(randomIndex));
 			}
 
-			for(int ix=0 ; ix<NODES_TO_JOIN ; ix++)
+			for(int ix=0 ; ix<numOfNodesToJoin ; ix++)
 			{
 				candidateNodeId = mSet.at(ix);
 

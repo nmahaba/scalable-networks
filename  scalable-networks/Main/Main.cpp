@@ -25,6 +25,7 @@ SNodeInformation nodeInformation[MAX_NUMBER_OF_NODES];
 int connectionInfo[MAX_NUMBER_OF_NODES] =	{0};
 int primeNode 							= 	0;
 int	numOfPrimeNodes						=	0;
+int numOfNodesToJoin					=	0;
 
 /* Data structures required for the algorithm */
 int DVM[MAX_NUMBER_OF_NODES][MAX_NUMBER_OF_NODES]; 	/* The distance vector matrix */
@@ -135,9 +136,9 @@ int main(int argc, char **argv)
 	int ix,jx;
 
 	/* Check command line arguments */
-	if(argc != 7)
+	if(argc != 8)
 	{
-		printf("ERROR: Invalid command line arguments\nnodes.out <<NodeId>> <<PrimeNode>> <<TCPPort>> <<UDPPort>> <<nodeInfoFile>> <<connectionInfoFile>>\n");
+		printf("ERROR: Invalid command line arguments\nnodes.out <<NodeId>> <<PrimeNode>> <<MValue>> <<TCPPort>> <<UDPPort>> <<nodeInfoFile>> <<connectionInfoFile>>\n");
 		return -1;
 	}
 
@@ -145,8 +146,9 @@ int main(int argc, char **argv)
 	/* Store own node information */
 	ownNodeId = atoi(argv[1]);
 	primeNode = atoi(argv[2]);
-	strcpy(nodeInformationFile, argv[5]);
-	strcpy(connectionInfoFile, argv[6]);
+	numOfNodesToJoin = atoi(argv[3]);
+	strcpy(nodeInformationFile, argv[6]);
+	strcpy(connectionInfoFile, argv[7]);
 
 	/* Read the connections file and fill the database */
 	if(initializeNodeDB(nodeInformationFile) == -1)
@@ -162,8 +164,8 @@ int main(int argc, char **argv)
 	pthread_mutex_lock(&mutex_nodeDB);
 
 	gethostname(nodeInformation[ownNodeId].hostName, MAX_CHARACTERS_IN_HOSTNAME);
-	strcpy(nodeInformation[ownNodeId].tcpPortNumber, argv[3]);
-	strcpy(nodeInformation[ownNodeId].udpPortNumber, argv[4]);
+	strcpy(nodeInformation[ownNodeId].tcpPortNumber, argv[4]);
+	strcpy(nodeInformation[ownNodeId].udpPortNumber, argv[5]);
 
 	/* Release lock for NodeDB */
 	pthread_mutex_unlock(&mutex_nodeDB);
