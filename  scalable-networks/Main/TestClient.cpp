@@ -14,13 +14,15 @@
 #include <netdb.h>
 #define SERVERPORT "4950"    // the port users will be connecting to
 #define MAXBUFLEN 1000
+#define MAX_NUMBER_OF_NODES 10
 
 int main(int argc, char *argv[])
 {
     int sockfd;
     struct addrinfo hints, *servinfo, *p;
     int rv;
-    int numbytes;
+    int numBytesSent;
+    int numBytesReceived;
     char buf[MAXBUFLEN],sendbuf[MAXBUFLEN] = "QUERY";
 
     struct QMessage
@@ -77,17 +79,15 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-    if ((numbytes = sendto(sockfd, sendbuf, MAXBUFLEN-1, 0, p->ai_addr, p->ai_addrlen)) == -1)
+    if ((numBytesSent = sendto(sockfd, sendbuf, MAXBUFLEN-1, 0, p->ai_addr, p->ai_addrlen)) == -1)
     {
         perror("TestNode: sendto");
         exit(1);
     }
     
-  //  printf("TestNode: sent %d bytes to %s\n", numbytes, argv[1]);
+    //printf("TestNode: sent %d bytes to %s\n", numbytes, argv[1]);
     
-    int numbytes2 = 0;
-    
-    if ((numbytes2 = recvfrom(sockfd, &qmesg, MAXBUFLEN - 1, 0, p->ai_addr, &(p->ai_addrlen))) == -1)
+    if ((numBytesReceived = recvfrom(sockfd, &qmesg, MAXBUFLEN-1, 0, p->ai_addr, &(p->ai_addrlen))) == -1)
     {
             perror("TestNode: recvfrom");
             exit(1);
@@ -101,13 +101,16 @@ int main(int argc, char *argv[])
    printf("\t-------------------------------------------------------\n");
    printf("\tNODE ID\t\t\tDISTANCE\t\tNEXT HOP\n");
 
-   for(int i =1; i<10;i++)
+   for(int i =1 ; i<MAX_NUMBER_OF_NODES ; i++)
    {
-	   printf("\n");
-
-	   for(int j =0 ; j<3 ; j++)
+	   if(qmesg.routing_tab[i][1] != 0xFFFF && qmesg.routing_tab[i][2] != 0xFFFF)
 	   {
-		  printf("\t%d\t\t",qmesg.routing_tab[i][j]);
+		   printf("\n");
+
+		   for(int j=0 ; j<3 ; j++)
+		   {
+			   printf("\t%d\t\t",qmesg.routing_tab[i][j]);
+		   }
 	   }
    }
 

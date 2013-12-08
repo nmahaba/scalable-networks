@@ -70,7 +70,7 @@ void *handleNodeQueries(void *data)
 	socklen_t addr_len;
 	//char s[INET6_ADDRSTRLEN];
 	int ix, jx;
-	int mynodeid =0, fdistance =0;
+	int mynodeid = 0, fdistance = 0;
 	int dist[MAX_NUMBER_OF_NODES], nexthop[MAX_NUMBER_OF_NODES];
 	int col, row;
 	char sendinfo[1000];
@@ -149,7 +149,7 @@ void *handleNodeQueries(void *data)
 
 		for (ix=0; ix<MAX_NUMBER_OF_NODES; ix++)
 		{
-			if (DistV[ix]!= 65535)
+			if (DistV[ix] != 65535)
 			{
 				if (DistV[ix] > fdistance)
 				{
@@ -158,10 +158,10 @@ void *handleNodeQueries(void *data)
 			}
 		}
 
-		for (col=0; col<MAX_NUMBER_OF_NODES; col++)
+		for (col=0 ; col<MAX_NUMBER_OF_NODES ; col++)
 		{
-			dist[col] = DVM[1][col];
-			nexthop[col] = mynodeid;
+			dist[col] 		= DVM[1][col];
+			nexthop[col] 	= NO_VALUE;
 
 			for (row = 0; row<MAX_NUMBER_OF_NODES; row++)
 			{
@@ -177,7 +177,7 @@ void *handleNodeQueries(void *data)
 			}
 		}
 
-		qmesg.nodeId = mynodeid;
+		qmesg.nodeId 	= mynodeid;
 		qmesg.fdistance = fdistance;
 
 		for (int i =0; i<MAX_NUMBER_OF_NODES; i++)
