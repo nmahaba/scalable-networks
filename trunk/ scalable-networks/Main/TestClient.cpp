@@ -14,7 +14,7 @@
 #include <netdb.h>
 #define SERVERPORT "4950"    // the port users will be connecting to
 #define MAXBUFLEN 1000
-#define MAX_NUMBER_OF_NODES 10
+#define MAX_NUMBER_OF_NODES 11
 
 int main(int argc, char *argv[])
 {
@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
 	qmesg.nodeId = 0;
 	qmesg.fdistance = 0;
 
-	for(int i =0 ; i<10 ; i++)
+	for(int i =0 ; i<MAX_NUMBER_OF_NODES ; i++)
 	{
 		for(int j =0 ; j<3 ; j++)
 		{

@@ -253,7 +253,7 @@ int processTCPConnections(int ownNodeId)
 	int numberOfBytesReceived = 0;  /* Number of bytes received by recv - If 0 then node has terminated connection */
 	fd_set master; 					/* Master file descriptor list */
 	fd_set read_fds; 				/* Temp file descriptor list for select() */
-	char buffer[200];
+	char buffer[MAXBUFLEN];
 	int messageSize	= -1;
 	eMessageId messageId;
 	int rv;
@@ -542,6 +542,8 @@ int processTCPConnections(int ownNodeId)
 
 						if(routeUpdateResult > 0)
 						{
+							printf("INFO: New host:%s added to the network\n", routeInformation.nodeInformation.hostName);
+
 							/* Update the database */
 							int originatorNodeId = routeInformation.nodeInformation.nodeId;
 
@@ -566,7 +568,7 @@ int processTCPConnections(int ownNodeId)
 								/* Don't send to yourself and the source of the message */
 								if((nodeInformation[jx].nodeId != ownNodeId) && (nodeInformation[jx].nodeId != routeInformation.nodeId) && (nodeInformation[jx].tcpSocketFd != -1))
 								{
-									if(sendRouteUpdate(nodeInformation[jx].nodeId, ownNodeId, routeInformation.nodeId) == -1)
+									if(sendRouteUpdate(nodeInformation[jx].nodeId, ownNodeId, routeInformation.nodeInformation.nodeId) == -1)
 									{
 										exit(1);
 									}
@@ -1045,7 +1047,7 @@ int connectToNewNode(char *hostName, char *TcpPortNumber)
 int sendConnectReq(int toNodeId, int ownNodeId)
 {
 	mConnectRequest connectRequest;
-	char sendBuffer[200];
+	char sendBuffer[MAXBUFLEN];
 	int tcpSocketFd;
 	int sentBytes = 0;
 
@@ -1102,7 +1104,7 @@ int sendRouteUpdate(int toNodeId, int ownNodeId, int originatorNode)
 	mRouteInformation routeInformation;
 	int tcpSocketFd;
 	int sendBytes;
-	char sendBuffer[200];
+	char sendBuffer[MAXBUFLEN];
 
 #ifdef DEBUG
 	/* DEBUG */
