@@ -13,7 +13,9 @@
 typedef struct
 {
 	int nodeId;
+	int nodeDegree;
 	int fdistance;
+	int fNodeId;
 	int routing_tab[MAX_NUMBER_OF_NODES][3];
 }SQMessage;
 
