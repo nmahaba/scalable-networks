@@ -27,9 +27,11 @@ int main(int argc, char *argv[])
 
     struct QMessage
     {
-        int nodeId;
-        int fdistance;
-        int routing_tab[10][3];
+    	int nodeId;
+    	int nodeDegree;
+    	int fdistance;
+    	int fNodeId;
+    	int routing_tab[MAX_NUMBER_OF_NODES][3];
     };
         
     struct QMessage qmesg;
@@ -94,7 +96,12 @@ int main(int argc, char *argv[])
     }
     
    printf("\n\n\t-------------------------------------------------------\n");
-   printf("\t\tThe id of node is: %d \n\t\tThe farthest distance from node is: %d\n", qmesg.nodeId,qmesg.fdistance);
+   printf("\t\tCurrentNodeId: %d \n\t\tCurrentNodeDegree: %d \n\t\tFarthestNodeId: %d \n\t\tFarthest distance: %d \n",
+		   qmesg.nodeId,
+		   qmesg.nodeDegree,
+		   qmesg.fNodeId,
+		   qmesg.fdistance);
+
    printf("\t-------------------------------------------------------\n\n\n");
    printf("\t-------------------------------------------------------\n");
    printf("\t\t\tROUTING TABLE\n");

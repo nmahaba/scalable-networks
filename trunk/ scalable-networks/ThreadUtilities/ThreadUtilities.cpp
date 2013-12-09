@@ -61,6 +61,8 @@ void *handleNodeQueries(void *data)
 {
 	printf("INFO: UDP Thread for handling Node Query messages\n");
 
+	int *inData = (int *) data;
+	int ownNodeId = *inData;
 	int sockfd;
 	struct addrinfo hints, *servinfo, *p;
 	int rv;
@@ -68,21 +70,14 @@ void *handleNodeQueries(void *data)
 	struct sockaddr_storage their_addr;
 	char buf[MAXBUFLEN];
 	socklen_t addr_len;
-	//char s[INET6_ADDRSTRLEN];
 	int ix, jx;
-	int mynodeid = 0, fdistance = 0;
+	int fdistance = 0;
+	int myNodeDegree = 0;
+	int myFarthestNodeId = -1;
 	int dist[MAX_NUMBER_OF_NODES], nexthop[MAX_NUMBER_OF_NODES];
 	int col, row;
 	char sendinfo[1000];
 	SQMessage qmesg;
-
-	for (ix=0; ix<MAX_NUMBER_OF_NODES; ix++)
-	{
-		if (DistV[ix] == 0)
-		{
-			mynodeid = ix;
-		}
-	}
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family 	= AF_UNSPEC; 	// Set to AF_INET to force IPv4
@@ -141,6 +136,10 @@ void *handleNodeQueries(void *data)
 
 		printf("INFO: TestNode queried for Routing Table information\n");
 
+		/* Reset the variables */
+		fdistance 			= -1;
+		myFarthestNodeId 	= -1;
+
 		//put mutex lock here and update the database.
 
 		/* Get lock for NodeDB */
@@ -153,7 +152,8 @@ void *handleNodeQueries(void *data)
 			{
 				if (DistV[ix] > fdistance)
 				{
-					fdistance = DistV[ix];
+					fdistance 			= DistV[ix];
+					myFarthestNodeId 	= ix; /* Store the nodeId of the farthest node */
 				}
 			}
 		}
@@ -177,8 +177,11 @@ void *handleNodeQueries(void *data)
 			}
 		}
 
-		qmesg.nodeId 	= mynodeid;
-		qmesg.fdistance = fdistance;
+		/* Form the message */
+		qmesg.nodeId 		= ownNodeId;
+		qmesg.fdistance 	= fdistance;
+		qmesg.fNodeId 		= myFarthestNodeId;
+		qmesg.nodeDegree 	= DegV[ownNodeId];
 
 		for (int i =0; i<MAX_NUMBER_OF_NODES; i++)
 		{
